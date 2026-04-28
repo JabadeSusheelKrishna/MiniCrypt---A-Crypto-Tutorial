@@ -1,6 +1,6 @@
 import os
 from pa1 import get_random_range
-from pa13_primality import gen_prime, is_prime, modular_exponentiation
+from pa13 import gen_prime, is_prime, modular_exponentiation
 
 # --- Group parameters (safe prime p = 2q+1) ---
 P = 0xFFFFFFFB

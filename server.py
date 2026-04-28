@@ -3,10 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import time
-from pa13_primality import miller_rabin, gen_prime, is_prime, modular_exponentiation
-from pa14_crt_rsa import crt, rsa_dec_crt, hastad_attack, benchmark_decryption, rsa_keygen, rsa_enc
-from pa15_digital_signatures import rsa_sign, rsa_verify, forge_raw_rsa
-from pa16_elgamal import elgamal_keygen, elgamal_enc, elgamal_dec, elgamal_malleability_attack
+from pa13 import miller_rabin, gen_prime, is_prime, modular_exponentiation
+from pa14 import crt, rsa_dec_crt, hastad_attack, benchmark_decryption, rsa_keygen, rsa_enc
+from pa15 import rsa_sign, rsa_verify, forge_raw_rsa
+from pa16 import elgamal_keygen, elgamal_enc, elgamal_dec, elgamal_malleability_attack
 import os
 
 def pkcs15_pad(m_bytes, n_bytes):
