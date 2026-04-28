@@ -12,6 +12,18 @@ const PA15DigitalSignatures = () => {
   const [forgedSig, setForgedSig] = useState(null);
   const [error, setError] = useState(null);
 
+  // Modular exponentiation: (base^exp) % mod
+  const modPow = (base, exp, mod) => {
+    let res = 1n;
+    base = base % mod;
+    while (exp > 0n) {
+      if (exp % 2n === 1n) res = (res * base) % mod;
+      base = (base * base) % mod;
+      exp = exp / 2n;
+    }
+    return res;
+  };
+
   const generateKeys = async () => {
     setLoading(true);
     setError(null);
@@ -36,15 +48,8 @@ const PA15DigitalSignatures = () => {
   const signMessage = async () => {
     if (!keys || !message) return;
     setLoading(true);
+    setError(null);
     try {
-      // Convert message to hex for the backend
-      // Note: Backend expects m_bytes_hex. 
-      // If useHash is false, we might need a different endpoint or logic, 
-      // but the requirement says "Raw RSA sign (no hash)" toggle.
-      // Let's check how the backend handles it. 
-      // Actually, pa15_digital_signatures.py ALWAYS hashes.
-      // I should check if I need to add a raw sign endpoint.
-      
       const encoder = new TextEncoder();
       const mBytes = encoder.encode(message);
       const mHex = Array.from(mBytes).map(b => b.toString(16).padStart(2, '0')).join('');
@@ -54,11 +59,16 @@ const PA15DigitalSignatures = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sk: keys.sk, m_bytes_hex: mHex }),
       });
+      
       const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || "Signing failed");
+      }
+      
       setSignature(data.sigma);
       setVerificationResult(null);
     } catch (err) {
-      setError(err.message);
+      setError("Signing Error: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -67,6 +77,7 @@ const PA15DigitalSignatures = () => {
   const verifySignature = async () => {
     if (!keys || !message || !signature) return;
     setLoading(true);
+    setError(null);
     try {
       const encoder = new TextEncoder();
       const mBytes = encoder.encode(message);
@@ -77,10 +88,15 @@ const PA15DigitalSignatures = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ vk: keys.pk, m_bytes_hex: mHex, sigma: signature }),
       });
+      
       const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || "Verification failed");
+      }
+      
       setVerificationResult(data.valid);
     } catch (err) {
-      setError(err.message);
+      setError("Verification Error: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -98,25 +114,30 @@ const PA15DigitalSignatures = () => {
   const runForgeryDemo = async () => {
     if (!keys) return;
     setLoading(true);
+    setError(null);
     try {
-        // We need raw signatures for m1 and m2 (integers)
-        // Since the backend /sign endpoint hashes, we need to simulate raw RSA
-        // sigma = m^d mod n
         const n = BigInt(keys.sk.n);
         const d = BigInt(keys.sk.d);
         
-        const s1 = BigInt(forgeData.m1) ** d % n;
-        const s2 = BigInt(forgeData.m2) ** d % n;
+        // Use modPow instead of ** to avoid hanging
+        const s1 = modPow(BigInt(forgeData.m1), d, n);
+        const s2 = modPow(BigInt(forgeData.m2), d, n);
 
         const response = await fetch('/api/pa15/forge_raw', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ s1: s1.toString(), s2: s2.toString(), n: keys.pk.n }),
         });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || 'Forgery failed');
+        }
+        
         const data = await response.json();
         setForgedSig(data.s3);
     } catch (err) {
-        setError(err.message);
+        setError("Forgery Error: " + err.message);
     } finally {
         setLoading(false);
     }
@@ -241,6 +262,20 @@ const PA15DigitalSignatures = () => {
             </div>
         )}
       </div>
+
+      {error && (
+        <div style={{ 
+          marginTop: '1rem', 
+          padding: '1rem', 
+          background: 'rgba(239, 68, 68, 0.1)', 
+          border: '1px solid var(--danger)', 
+          borderRadius: '8px',
+          color: 'var(--danger)',
+          fontSize: '0.875rem'
+        }}>
+          <strong>Error:</strong> {error}
+        </div>
+      )}
     </div>
   );
 };

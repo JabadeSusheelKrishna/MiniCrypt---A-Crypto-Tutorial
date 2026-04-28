@@ -36,18 +36,29 @@ const PA16ElGamal = () => {
   const encryptMessage = async () => {
     if (!keys || !m) return;
     setLoading(true);
+    setError(null);
     try {
+      // Validate that m is a number
+      if (isNaN(m) || m.trim() === "") {
+        throw new Error("Message must be a valid integer");
+      }
+
       const response = await fetch('/api/pa16/encrypt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pk: keys.pk, m }),
       });
+      
       const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || "Encryption failed");
+      }
+      
       setCiphertext(data);
       setDecryptedM(null);
       setMalleableCiphertext(null);
     } catch (err) {
-      setError(err.message);
+      setError("Encryption Error: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -205,6 +216,20 @@ const PA16ElGamal = () => {
                     </div>
                 )}
             </div>
+        </div>
+      )}
+
+      {error && (
+        <div style={{ 
+          marginTop: '1.5rem', 
+          padding: '1rem', 
+          background: 'rgba(239, 68, 68, 0.1)', 
+          border: '1px solid var(--danger)', 
+          borderRadius: '8px',
+          color: 'var(--danger)',
+          fontSize: '0.875rem'
+        }}>
+          <strong>Error:</strong> {error}
         </div>
       )}
     </div>
