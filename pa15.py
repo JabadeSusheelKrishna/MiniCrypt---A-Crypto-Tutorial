@@ -1,6 +1,7 @@
 import random
 from pa8 import hash_message
 from pa14 import modular_exponentiation
+from pa12 import rsa_keygen
 
 def rsa_sign(sk, m: bytes) -> int:
     """
@@ -52,3 +53,13 @@ def euf_cma_game(adversary, vk, signing_oracle):
     # Check 2: sigma_star is a valid signature for m_star
     return rsa_verify(vk, m_star, sigma_star)
 
+def keygen(bits=512):
+    pk, sk_full = rsa_keygen(bits)
+
+    N, e = pk
+    d = sk_full[1]
+
+    vk = (N, e)
+    sk = (N, d)
+
+    return vk, sk
