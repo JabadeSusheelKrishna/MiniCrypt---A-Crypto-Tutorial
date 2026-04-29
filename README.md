@@ -33,6 +33,6 @@ uvicorn server:app --host 0.0.0.0 --port 8000
 ```bash
 cd frontend
 npm install
-npm start
+npm run dev
 ```
 - Then go to browser and check `localhost:3000`
