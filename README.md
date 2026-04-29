@@ -1,18 +1,5 @@
 # POIS-Project
 
-
-#### 17 (CCA Secure PKC)
-
-#### 18 (Oblivious Transfer - OT)
-
-
-#### 19 (SECURE AND GATE)
-
-
-
-#### 20 (All 2 Party Secure Computation - YAO/GMW)
-
-
 ### **Note:**
 
 Current repo contains a backend server which works for PA13 to PA16 only and a frontend folder which contains components for PA13 to PA16 only!
@@ -36,3 +23,5 @@ npm install
 npm run dev
 ```
 - Then go to browser and check `localhost:3000`
+
+

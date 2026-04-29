@@ -1,3 +1,5 @@
+# Depends only on pa15 and pa16
+
 import importlib
 import random
 
