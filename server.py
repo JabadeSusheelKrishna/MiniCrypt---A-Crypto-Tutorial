@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import time
+import random
 from pa13 import miller_rabin, gen_prime, is_prime, modular_exponentiation
 from pa14 import crt, rsa_dec_crt, hastad_attack, benchmark_decryption, rsa_keygen, rsa_enc
 from pa15 import rsa_sign, rsa_verify, forge_raw_rsa
@@ -102,6 +103,38 @@ class PA16MalleabilityRequest(BaseModel):
     c2: str
     p: str
     multiplier: str
+
+#PA17 models
+class PA17EncryptRequest(BaseModel):
+    pk_enc: dict   # p,g,q,h
+    sk_sign: dict  # n,d
+    m: str
+
+class PA17DecryptRequest(BaseModel):
+    sk_enc: dict   # x,p
+    vk_sign: dict  # n,e
+    c1: str
+    c2: str
+    sigma: str
+
+def serialize_ciphertext(c1, c2):
+    return f"{c1},{c2}".encode()
+
+# PA18 Models
+class OTStep1Request(BaseModel):
+    b: int
+
+class OTSenderRequest(BaseModel):
+    pk0: dict
+    pk1: dict
+    m0: str
+    m1: str
+
+class OTStep2Request(BaseModel):
+    state: dict
+    c0: dict
+    c1: dict
+
 
 @app.post("/pa13/test")
 async def test_primality(request: PrimalityTestRequest):
@@ -306,6 +339,151 @@ async def pa16_attack(request: PA16MalleabilityRequest):
         return {"c1": str(nc1), "c2": str(nc2)}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+# PA17 routes
+@app.post("/pa17/encrypt")
+async def pa17_encrypt(request: PA17EncryptRequest):
+    try:
+        # Parse inputs
+        pk = (
+            int(request.pk_enc["p"]),
+            int(request.pk_enc["g"]),
+            int(request.pk_enc["q"]),
+            int(request.pk_enc["h"])
+        )
+        sk_sign = (int(request.sk_sign["n"]), int(request.sk_sign["d"]))
+        m = int(request.m)
+
+        # Encrypt
+        c1, c2 = elgamal_enc(pk, m)
+
+        # Sign ciphertext
+        sigma = rsa_sign(sk_sign, serialize_ciphertext(c1, c2))
+
+        return {
+            "c1": str(c1),
+            "c2": str(c2),
+            "sigma": str(sigma)
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/pa17/decrypt")
+async def pa17_decrypt(request: PA17DecryptRequest):
+    try:
+        sk = (int(request.sk_enc["x"]), int(request.sk_enc["p"]))
+        vk = (int(request.vk_sign["n"]), int(request.vk_sign["e"]))
+
+        c1 = int(request.c1)
+        c2 = int(request.c2)
+        sigma = int(request.sigma)
+
+        # VERIFY FIRST
+        valid = rsa_verify(vk, serialize_ciphertext(c1, c2), sigma)
+
+        if not valid:
+            return {
+                "status": "invalid_signature",
+                "message": "Signature invalid, decryption aborted",
+                "output": None
+            }
+
+        # THEN decrypt
+        m = elgamal_dec(sk, c1, c2)
+
+        return {
+            "status": "success",
+            "message": "Decryption successful",
+            "output": str(m)
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+# PA18 routes
+@app.post("/pa18/step1")
+async def ot_step1(request: OTStep1Request):
+    try:
+        sk, pk = elgamal_keygen(32)
+        p, g, q, h = pk
+
+        fake_h = random.randint(2, p - 2)
+        pk_fake = (p, g, q, fake_h)
+
+        if request.b == 0:
+            pk0, pk1 = pk, pk_fake
+        else:
+            pk0, pk1 = pk_fake, pk
+
+        state = {
+            "b": request.b,
+            "sk": {"x": str(sk[0]), "p": str(sk[1])}
+        }
+
+        def serialize(pk):
+            return {
+                "p": str(pk[0]),
+                "g": str(pk[1]),
+                "q": str(pk[2]),
+                "h": str(pk[3])
+            }
+
+        return {
+            "pk0": serialize(pk0),
+            "pk1": serialize(pk1),
+            "state": state
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/pa18/step2")
+async def ot_step2(request: OTStep2Request):
+    try:
+        b = request.state["b"]
+        sk = (
+            int(request.state["sk"]["x"]),
+            int(request.state["sk"]["p"])
+        )
+
+        if b == 0:
+            c = request.c0
+        else:
+            c = request.c1
+
+        m = elgamal_dec(
+            sk,
+            int(c["c1"]),
+            int(c["c2"])
+        )
+
+        return {"mb": str(m)}
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/pa18/cheat")
+async def ot_cheat(request: OTStep2Request):
+    try:
+        b = request.state["b"]
+        sk = (
+            int(request.state["sk"]["x"]),
+            int(request.state["sk"]["p"])
+        )
+
+        # Try decrypting other ciphertext
+        c = request.c1 if b == 0 else request.c0
+
+        try:
+            m = elgamal_dec(sk, int(c["c1"]), int(c["c2"]))
+            return {"result": str(m), "status": "unexpected_success"}
+        except:
+            return {"result": None, "status": "failed"}
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 
 if __name__ == "__main__":
     import uvicorn

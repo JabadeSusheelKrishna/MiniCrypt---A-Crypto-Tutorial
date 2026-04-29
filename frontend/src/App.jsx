@@ -3,6 +3,8 @@ import PrimalityTester from './components/PA13PrimalityTester';
 import PA14CRT from './components/PA14CRT';
 import PA15DigitalSignatures from './components/PA15DigitalSignatures';
 import PA16ElGamal from './components/PA16ElGamal';
+import PA17CCA from './components/PA17CCA';
+import PA18OT from './components/PA18OT';
 
 const App = () => {
   const [foundation, setFoundation] = useState('DLP');
@@ -44,6 +46,8 @@ const App = () => {
         <PA14CRT />
         <PA15DigitalSignatures />
         <PA16ElGamal />
+        <PA17CCA />
+        <PA18OT />
       </main>
 
       <footer className="bottom-panel" style={{ maxHeight: proofOpen ? '600px' : '60px' }}>
