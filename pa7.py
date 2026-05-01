@@ -10,7 +10,7 @@ def md_pad(m: bytes, block_size=BLOCK_SIZE) -> bytes:
     m += length.to_bytes(8, "big")
     return m
 
-# --- Merkle-Damgård Framework ---
+# --- Merkle-Damg??rd Framework ---
 def merkle_damgard(compress, message: bytes,
                    block_size=BLOCK_SIZE, iv=IV) -> int:
     padded = md_pad(message, block_size)

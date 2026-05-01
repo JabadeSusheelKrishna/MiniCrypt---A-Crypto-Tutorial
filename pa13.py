@@ -141,7 +141,7 @@ def run_performance_benchmarks():
 def run_root_benchmark():
     print("\n--- Benchmark for integer_nth_root ---")
     try:
-        from pa14_crt_rsa import integer_nth_root
+        from pa14 import integer_nth_root
         
         e = 3
         # Test 10k bits

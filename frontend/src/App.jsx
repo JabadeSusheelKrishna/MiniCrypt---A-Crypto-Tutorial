@@ -1,4 +1,10 @@
 import React, { useState } from 'react';
+import PA1PRG from './components/PA1PRG';
+import PA2PRF from './components/PA2PRF';
+import PA3CPA from './components/PA3CPA';
+import PA4Modes from './components/PA4Modes';
+import PA5MAC from './components/PA5MAC';
+import PA6CCA from './components/PA6CCA';
 import PrimalityTester from './components/PA13PrimalityTester';
 import PA14CRT from './components/PA14CRT';
 import PA15DigitalSignatures from './components/PA15DigitalSignatures';
@@ -31,16 +37,12 @@ const App = () => {
       </header>
 
       <main className="main-content">
-        <div className="panel">
-          <div className="panel-header">
-            <h2 className="panel-title">Column 1: Build Source</h2>
-            <p className="panel-subtitle">Foundation → Source Primitive A</p>
-          </div>
-          <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '3rem 0' }}>
-            <p>Not implemented yet (due: PA#1)</p>
-            <p style={{ fontSize: '0.75rem', marginTop: '0.5rem' }}>Using temporary numpy-based random pool.</p>
-          </div>
-        </div>
+        <PA1PRG />
+        <PA2PRF />
+        <PA3CPA />
+        <PA4Modes />
+        <PA5MAC />
+        <PA6CCA />
 
         <PrimalityTester />
         <PA14CRT />
@@ -58,7 +60,47 @@ const App = () => {
           </span>
         </div>
         {proofOpen && (
-          <div style={{ padding: '1rem 0', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <div style={{ padding: '1rem 0', color: 'var(--text-muted)', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
+            <div>
+              <p><strong>OWF & PRG (PA #1):</strong> Foundations of Minicrypt.</p>
+              <p style={{ fontSize: '0.875rem' }}>
+                Modular exponentiation is a candidate One-Way Function. 
+                Using the hard-core bit (LSB), we construct a PRG (Blum-Micali style).
+              </p>
+            </div>
+
+            <div>
+              <p><strong>PRF (PA #2):</strong> GGM Construction.</p>
+              <p style={{ fontSize: '0.875rem' }}>
+                Theorem: Goldreich, Goldwasser, Micali (1986). A length-doubling PRG 
+                can be used to build a PRF by traversing a binary tree of seeds.
+              </p>
+            </div>
+
+            <div>
+              <p><strong>CPA-Secure Encryption (PA #3):</strong> Counter Mode.</p>
+              <p style={{ fontSize: '0.875rem' }}>
+                PRF-based encryption in Counter mode is IND-CPA secure. 
+                Vulnerability: Reusing the same nonce (r) breaks secrecy.
+              </p>
+            </div>
+
+            <div>
+              <p><strong>MAC (PA #5):</strong> Integrity Foundations.</p>
+              <p style={{ fontSize: '0.875rem' }}>
+                CBC-MAC is secure for fixed-length messages. 
+                Vulnerability: Naive H(k||m) is vulnerable to length-extension attacks.
+              </p>
+            </div>
+
+            <div>
+              <p><strong>CCA-Secure Encryption (PA #6):</strong> Encrypt-then-MAC.</p>
+              <p style={{ fontSize: '0.875rem' }}>
+                Composition: IND-CPA Enc + SUF-CMA MAC = IND-CCA2 security. 
+                Ensures both secrecy and integrity (ciphertext non-malleability).
+              </p>
+            </div>
+
             <div>
               <p><strong>Primality Testing (PA #13):</strong> A standalone component for RSA and ElGamal.</p>
               <p style={{ fontSize: '0.875rem' }}>

@@ -1,104 +1,151 @@
 import os
-from pa2 import prf
+from pa2 import F
 
+BLOCK_SIZE = 1  # Using 1-byte blocks for simplicity with S-box
 MASK = 0xFF
 
-# --- Invertible block cipher via PRF-keyed S-box ---
-def _sbox(k):
+# --- Invertible Block Cipher (Permutation) via PRF-keyed S-box ---
+def _get_sbox(k):
     box = list(range(256))
-    for i in range(256):
-        j = (prf(k, i) ^ i) % 256
+    # Fisher-Yates shuffle keyed by PRF
+    for i in range(255, 0, -1):
+        j = F(k, i) % (i + 1)
         box[i], box[j] = box[j], box[i]
+    
     inv = [0] * 256
-    for i, v in enumerate(box): inv[v] = i
+    for i, v in enumerate(box):
+        inv[v] = i
     return box, inv
 
 _cache = {}
-def _boxes(k):
-    if k not in _cache: _cache[k] = _sbox(k)
-    return _cache[k]
+def Ek(k, x):
+    if k not in _cache: _cache[k] = _get_sbox(k)
+    return _cache[k][0][x & MASK]
 
-def Ek(k, x):     return _boxes(k)[0][x & MASK]
-def Ek_inv(k, x): return _boxes(k)[1][x & MASK]   # true inverse
+def Dk(k, y):
+    if k not in _cache: _cache[k] = _get_sbox(k)
+    return _cache[k][1][y & MASK]
 
-def rand(): return int.from_bytes(os.urandom(1), "big")
+def rand_byte():
+    return os.urandom(1)[0]
 
-# --- CBC ---
-def cbc_enc(k, m: bytes, iv=None):
-    iv = iv if iv is not None else rand()
-    prev, ct = iv, [iv]
-    for b in m:
-        prev = Ek(k, prev ^ b)
-        ct.append(prev)
-    return ct
+# --- Mode 1: CBC (Cipher Block Chaining) ---
+def CBC_Enc(k, IV, M: bytes):
+    """Ci = Ek(Ci-1 XOR Mi)"""
+    ct = []
+    prev = IV
+    for b in M:
+        curr = Ek(k, prev ^ b)
+        ct.append(curr)
+        prev = curr
+    return bytes(ct)
 
-def cbc_dec(k, ct: list):
-    iv, blocks = ct[0], ct[1:]
-    prev, pt = iv, []
-    for c in blocks:
-        pt.append(Ek_inv(k, c) ^ prev)   # FIXED: correct inverse
-        prev = c
+def CBC_Dec(k, IV, C: bytes):
+    """Mi = Dk(Ci) XOR Ci-1"""
+    pt = []
+    prev = IV
+    for b in C:
+        curr = Dk(k, b) ^ prev
+        pt.append(curr)
+        prev = b
     return bytes(pt)
 
-# --- OFB ---
-def ofb_enc(k, m: bytes, iv=None):
-    iv = iv if iv is not None else rand()
-    s, ct = iv, [iv]
-    for b in m:
+# --- Mode 2: OFB (Output Feedback) ---
+def OFB_Enc(k, IV, M: bytes):
+    """Si = Ek(Si-1); Ci = Si XOR Mi"""
+    ct = []
+    s = IV
+    for b in M:
         s = Ek(k, s)
         ct.append(s ^ b)
-    return ct
+    return bytes(ct)
 
-def ofb_dec(k, ct: list):
-    iv, blocks = ct[0], ct[1:]
-    s, pt = iv, []
-    for c in blocks:
-        s = Ek(k, s)
-        pt.append(s ^ c)
+def OFB_Dec(k, IV, C: bytes):
+    """Encryption and decryption are identical for OFB"""
+    return OFB_Enc(k, IV, C)
+
+# --- Mode 3: Randomized CTR (Counter Mode) ---
+def CTR_Enc(k, M: bytes):
+    """Samples random nonce r internally. Returns (r, C)"""
+    r = rand_byte()
+    ct = []
+    for i, b in enumerate(M):
+        keystream = Ek(k, (r + i) & MASK)
+        ct.append(keystream ^ b)
+    return r, bytes(ct)
+
+def CTR_Dec(k, r, C: bytes):
+    """Mi = Ek(r + i) XOR Ci"""
+    pt = []
+    for i, b in enumerate(C):
+        keystream = Ek(k, (r + i) & MASK)
+        pt.append(keystream ^ b)
     return bytes(pt)
 
-# --- CTR ---
-def ctr_enc(k, m: bytes, r=None):
-    r = r if r is not None else rand()
-    return [r] + [Ek(k, (r+i) & MASK) ^ b for i, b in enumerate(m)]
+# --- Unified Mode Selector Interface ---
+def Encrypt(mode, k, M):
+    if mode == "CBC":
+        iv = rand_byte()
+        return iv, CBC_Enc(k, iv, M)
+    elif mode == "OFB":
+        iv = rand_byte()
+        return iv, OFB_Enc(k, iv, M)
+    elif mode == "CTR":
+        return CTR_Enc(k, M)
+    else:
+        raise ValueError("Unknown mode")
 
-def ctr_dec(k, ct: list):
-    r, blocks = ct[0], ct[1:]
-    return bytes(Ek(k, (r+i) & MASK) ^ c for i, c in enumerate(blocks))
+def Decrypt(mode, k, IV_or_r, C):
+    if mode == "CBC":
+        return CBC_Dec(k, IV_or_r, C)
+    elif mode == "OFB":
+        return OFB_Dec(k, IV_or_r, C)
+    elif mode == "CTR":
+        return CTR_Dec(k, IV_or_r, C)
+    else:
+        raise ValueError("Unknown mode")
 
-# --- Unified API ---
-def encrypt(mode, k, m): return {"CBC": cbc_enc, "OFB": ofb_enc, "CTR": ctr_enc}[mode](k, m)
-def decrypt(mode, k, ct): return {"CBC": cbc_dec, "OFB": ofb_dec, "CTR": ctr_dec}[mode](k, ct)
+# --- Attack Demos ---
+def cbc_iv_reuse_demo(k):
+    print("\n--- CBC IV-Reuse Attack Demo ---")
+    iv = rand_byte()
+    m1 = b"HELLO"
+    m2 = b"HELLX"
+    c1 = CBC_Enc(k, iv, m1)
+    c2 = CBC_Enc(k, iv, m2)
+    print(f"  m1: {m1}, m2: {m2}, IV: {iv}")
+    print(f"  c1: {c1.hex()}")
+    print(f"  c2: {c2.hex()}")
+    for i in range(len(c1)):
+        if c1[i] == c2[i]:
+            print(f"  Block {i} matches! (Leaked: first {i+1} bytes are same)")
+        else:
+            break
 
-# --- CBC IV-reuse attack ---
-def cbc_iv_reuse_attack(k):
-    iv = rand()
-    ct0 = cbc_enc(k, b"AABB", iv=iv)
-    ct1 = cbc_enc(k, b"AAXX", iv=iv)
-    print("CBC IV-reuse attack:")
-    for i in range(1, min(len(ct0), len(ct1))):
-        if ct0[i] == ct1[i]:
-            print(f"  Block {i-1}: ct0==ct1 → m0[{i-1}] == m1[{i-1}] (leaked!)")
+def ofb_keystream_reuse_demo(k):
+    print("\n--- OFB Keystream-Reuse Attack Demo ---")
+    iv = rand_byte()
+    m1 = b"SECRET"
+    m2 = b"ATTACK"
+    c1 = OFB_Enc(k, iv, m1)
+    c2 = OFB_Enc(k, iv, m2)
+    # If IV is reused, c1 ^ c2 == m1 ^ m2
+    xored_c = bytes(a ^ b for a, b in zip(c1, c2))
+    xored_m = bytes(a ^ b for a, b in zip(m1, m2))
+    print(f"  c1 ^ c2: {xored_c.hex()}")
+    print(f"  m1 ^ m2: {xored_m.hex()}")
+    print(f"  Match: {xored_c == xored_m} (Keystream canceled out!)")
 
-# --- OFB keystream-reuse attack ---
-def ofb_iv_reuse_attack(k):
-    iv = rand()
-    ct0 = ofb_enc(k, b"SECRET", iv)[1:]
-    ct1 = ofb_enc(k, b"XXXXXX", iv)[1:]
-    xored = bytes(a ^ b for a, b in zip(ct0, ct1))
-    expected = bytes(a ^ b for a, b in zip(b"SECRET", b"XXXXXX"))
-    print(f"OFB IV-reuse: xor={xored.hex()} == m0^m1={expected.hex()} → {xored==expected}")
-
-# --- Demo ---
 if __name__ == "__main__":
-    k = rand()
-    print("=== Correctness ===")
+    k = int.from_bytes(os.urandom(4), "big")
+    
+    print("=== Correctness Tests (3 lengths) ===")
     for mode in ["CBC", "OFB", "CTR"]:
-        for m in [b"A", b"ABC", b"Hello!"]:
-            ct = encrypt(mode, k, m)
-            pt = decrypt(mode, k, ct)
-            print(f"  {'✓' if pt==m else '✗'} {mode} {m!r} → {pt!r}")
-    print()
-    cbc_iv_reuse_attack(k)
-    print()
-    ofb_iv_reuse_attack(k)
+        for length in [0, 1, 10]:
+            m = os.urandom(length)
+            iv_r, c = Encrypt(mode, k, m)
+            p = Decrypt(mode, k, iv_r, c)
+            print(f"  [{mode}] Len {length:2}: {'PASS' if m == p else 'FAIL'}")
+
+    cbc_iv_reuse_demo(k)
+    ofb_keystream_reuse_demo(k)

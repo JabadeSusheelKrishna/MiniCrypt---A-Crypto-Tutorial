@@ -1,7 +1,7 @@
 # Depends only on pa15 and pa16
 
 import importlib
-import random
+from proxy_random import random
 
 # Load modules
 sig_module = importlib.import_module("pa15")
@@ -38,7 +38,7 @@ def cca_encrypt(pk_enc, sk_sign, m):
 def cca_decrypt(sk_enc, vk_sign, CE, sigma):
     # VERIFY FIRST (critical)
     if not verify(vk_sign, serialize_ciphertext(CE), sigma):
-        return None   # ⊥
+        return None   # ???
 
     c1, c2 = CE
     return elgamal_dec(sk_enc, c1, c2)
@@ -92,7 +92,7 @@ def dummy_adversary():
 
         result = oracle(modified, sigma)
 
-        # If attack worked → learn something
+        # If attack worked ??? learn something
         if result is not None:
             return 1
         return random.randint(0, 1)
@@ -133,7 +133,7 @@ def cca_attack_demo(pk_enc, sk_enc, vk_sign, sk_sign, message):
     print("Modified ciphertext:", modified)
 
     if result is None:
-        print("Attack blocked (⊥)")
+        print("Attack blocked (???)")
     else:
         print("Unexpected success:", result)
 

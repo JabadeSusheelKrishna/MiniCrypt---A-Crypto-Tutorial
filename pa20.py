@@ -1,4 +1,4 @@
-# PA #20 — Secure 2-Party Computation (Circuit-based)
+# PA #20 ??? Secure 2-Party Computation (Circuit-based)
 
 import importlib
 import time
@@ -188,7 +188,7 @@ def build_gt_circuit(n):
 def privacy_check():
     print("\n--- Privacy Check ---")
     print("Transcript sample:", TRANSCRIPT[:5])
-    print("Transcript depends only on operations, not full inputs → simulatable")
+    print("Transcript depends only on operations, not full inputs ??? simulatable")
 
 
 # ----------------------------------------

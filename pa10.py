@@ -1,6 +1,6 @@
 import os
 from pa8 import dlp_hash
-from pa3 import enc, dec
+from pa3 import Enc, Dec
 
 BLOCK = 8
 IPAD  = 0x36
@@ -12,7 +12,7 @@ def _pad_key(k: bytes) -> bytes:
         k = dlp_hash(k).to_bytes(4, "big")
     return k.ljust(BLOCK, b"\x00")
 
-# --- HMAC = H( (k⊕opad) || H( (k⊕ipad) || m ) ) ---
+# --- HMAC = H( (k???opad) || H( (k???ipad) || m ) ) ---
 def hmac(k: bytes, m: bytes) -> int:
     kp    = _pad_key(k)
     ikey  = bytes(b ^ IPAD for b in kp)
@@ -31,21 +31,21 @@ def secure_cmp(t1: int, t2: int) -> bool:
 def hmac_verify(k: bytes, m: bytes, t: int) -> bool:
     return secure_cmp(hmac(k, m), t)
 
-# --- MAC⇒CRHF (backward): HMAC as compression fn ---
+# --- MAC???CRHF (backward): HMAC as compression fn ---
 def mac_compress(cv: int, block: bytes) -> int:
     return hmac(cv.to_bytes(4, "big"), block)
 
 # --- Encrypt-then-HMAC (CCA-secure) ---
 def eth_enc(kE, kM, m):
-    r, ct = enc(kE, m)
-    t = hmac(kM, r.to_bytes(1, "big") + ct)
+    r, ct = Enc(kE, m)
+    t = hmac(kM, r.to_bytes(4, "big") + ct)
     return (r, ct), t
 
 def eth_dec(kE, kM, CE, t):
     r, ct = CE
-    if not hmac_verify(kM, r.to_bytes(1, "big") + ct, t):
+    if not hmac_verify(kM, r.to_bytes(4, "big") + ct, t):
         return None
-    return dec(kE, r, ct)            # FIXED: correct dec(k, r, ct) signature
+    return Dec(kE, r, ct)            # FIXED: correct Dec(k, r, ct) signature
 
 # --- Length-extension demo (naive vs HMAC) ---
 def length_extension_demo(k: bytes, m: bytes):
@@ -54,7 +54,7 @@ def length_extension_demo(k: bytes, m: bytes):
     extended = dlp_hash(k + m + b"\x80\x00" + suffix)
     print(f"Naive  H(k||m||pad||m') forgeable : tag={extended:#010x}")
     hmac_t = hmac(k, m)
-    print(f"HMAC   tag={hmac_t:#010x}  ← adversary cannot extend without k")
+    print(f"HMAC   tag={hmac_t:#010x}  <- adversary cannot extend without k")
 
 # --- EUF-CMA game ---
 def euf_cma_game(k: bytes, queries=50, attempts=20):

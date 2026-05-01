@@ -22,7 +22,7 @@ def birthday_floyd(hash_fn, n: int) -> tuple:
     MASK = (1 << n) - 1
     def f(x): return hash_fn(x.to_bytes(4, "big"), n)
 
-    # Tortoise & hare — find cycle
+    # Tortoise & hare ??? find cycle
     t = int.from_bytes(os.urandom(2), "big") & MASK
     h = t
     while True:
@@ -62,7 +62,7 @@ def md5_sha1_context():
     for name, n in [("MD5", 128), ("SHA-1", 160), ("SHA-256", 256)]:
         ops  = 2 ** (n // 2)
         yrs  = ops / 1e9 / (3600 * 24 * 365)
-        print(f"{name:8}: 2^{n//2} ops ≈ {yrs:.2e} years at 10^9 hash/sec")
+        print(f"{name:8}: 2^{n//2} ops ??? {yrs:.2e} years at 10^9 hash/sec")
 
 # --- Demo ---
 if __name__ == "__main__":

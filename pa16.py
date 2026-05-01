@@ -1,4 +1,4 @@
-import random
+from proxy_random import random
 from pa13 import modular_exponentiation
 from pa14 import mod_inverse
 from pa11 import generate_group

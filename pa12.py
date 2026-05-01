@@ -13,8 +13,8 @@ def mod_inv(a, n):
 
 def rsa_keygen(bits=512):
     while True:
-        p = gen_prime(bits // 2)        # uses pa13's gen_prime
-        q = gen_prime(bits // 2)
+        p, _ = gen_prime(bits // 2)        # uses pa13's gen_prime
+        q, _ = gen_prime(bits // 2)
         if p == q:
             continue
         N   = p * q

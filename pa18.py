@@ -1,6 +1,6 @@
-# PA #18 — Oblivious Transfer (1-out-of-2)
+# PA #18 ??? Oblivious Transfer (1-out-of-2)
 # Depends only on PA 16
-import random
+from proxy_random import random
 import importlib
 
 # Correct import
@@ -85,7 +85,7 @@ def receiver_privacy_demo():
 
     print("pk0:", pk0)
     print("pk1:", pk1)
-    print("Indistinguishable → sender cannot learn b")
+    print("Indistinguishable ??? sender cannot learn b")
 
 
 # ----------------------------------------
@@ -126,7 +126,9 @@ def correctness_test(trials=100):
             print("Error!", m0, m1, b, mb)
             return
 
-    print(f"All {trials} tests passed!")
+        print(".", end="")
+
+    print(f"\nAll {trials} tests passed!")
 
 
 # ----------------------------------------

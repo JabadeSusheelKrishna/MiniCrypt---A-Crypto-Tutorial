@@ -3,12 +3,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import time
-import random
+from proxy_random import random
 from pa13 import miller_rabin, gen_prime, is_prime, modular_exponentiation
 from pa14 import crt, rsa_dec_crt, hastad_attack, benchmark_decryption, rsa_keygen, rsa_enc
 from pa15 import rsa_sign, rsa_verify, forge_raw_rsa
 from pa16 import elgamal_keygen, elgamal_enc, elgamal_dec, elgamal_malleability_attack
+from pa1 import DLP_OWF, prg, freq_test, runs_test, serial_test
+from pa2 import F as prf_f, distinguishing_game as prf_distinguish
+from pa3 import Enc as cpa_enc, Dec as cpa_dec, ind_cpa_game
+from pa4 import Encrypt as mode_enc, Decrypt as mode_dec, cbc_iv_reuse_demo, ofb_keystream_reuse_demo
+from pa5 import Mac as mac_f, Vrfy as mac_vrfy, length_extension_demo
+from pa6 import CCA_Enc, CCA_Dec, malleability_demo, independent_keygen
 import os
+import math
 
 def pkcs15_pad(m_bytes, n_bytes):
     msg_len = len(m_bytes)
@@ -134,6 +141,82 @@ class OTStep2Request(BaseModel):
     state: dict
     c0: dict
     c1: dict
+
+# PA1 Models
+class PA1OWFEvaluateRequest(BaseModel):
+    x: int
+
+class PA1PRGGenerateRequest(BaseModel):
+    seed: int
+    length: int
+
+class PA1PRGTestRequest(BaseModel):
+    bits: List[int]
+
+# PA2 Models
+class PA2PRFEvaluateRequest(BaseModel):
+    k: int
+    x: int
+    depth: Optional[int] = 8
+
+class PA2PRFDistinguishRequest(BaseModel):
+    q: Optional[int] = 100
+
+# PA3 Models
+class PA3EncryptRequest(BaseModel):
+    k: int
+    m: str
+
+class PA3DecryptRequest(BaseModel):
+    k: int
+    r: int
+    c_hex: str
+
+class PA3INDCPAREquest(BaseModel):
+    queries: Optional[int] = 50
+
+# PA4 Models
+class PA4EncryptRequest(BaseModel):
+    mode: str
+    k: int
+    m: str
+
+class PA4DecryptRequest(BaseModel):
+    mode: str
+    k: int
+    iv_or_r: int
+    c_hex: str
+
+class PA4IVReuseRequest(BaseModel):
+    k: int
+
+# PA5 Models
+class PA5MACRequest(BaseModel):
+    mode: str
+    k: int
+    m_hex: str
+
+class PA5VerifyRequest(BaseModel):
+    mode: str
+    k: int
+    m_hex: str
+    tag: int
+
+class PA5ExtensionRequest(BaseModel):
+    k: int
+
+# PA6 Models
+class PA6EncryptRequest(BaseModel):
+    ke: int
+    km: int
+    m: str
+
+class PA6DecryptRequest(BaseModel):
+    ke: int
+    km: int
+    r: int
+    ct_hex: str
+    tag: int
 
 
 @app.post("/pa13/test")
@@ -483,6 +566,172 @@ async def ot_cheat(request: OTStep2Request):
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# PA1 Endpoints
+@app.post("/pa1/owf/evaluate")
+async def pa1_owf_evaluate(request: PA1OWFEvaluateRequest):
+    owf = DLP_OWF()
+    return {"y": str(owf.evaluate(request.x))}
+
+@app.post("/pa1/owf/verify")
+async def pa1_owf_verify():
+    owf = DLP_OWF()
+    # Simplified hardness verification for web
+    x = random.randint(0, owf.Q - 1)
+    y = owf.evaluate(x)
+    start = time.time()
+    found = False
+    count = 0
+    while time.time() - start < 0.5: # Half second for web response
+        if owf.evaluate(count) == y:
+            found = True
+            break
+        count += 1
+    return {"target": str(y), "found": found, "count": count}
+
+@app.post("/pa1/prg/generate")
+async def pa1_prg_generate(request: PA1PRGGenerateRequest):
+    bits = prg(request.seed, request.length)
+    return {"bits": bits}
+
+@app.post("/pa1/prg/test")
+async def pa1_prg_test(request: PA1PRGTestRequest):
+    return {
+        "freq_p": freq_test(request.bits),
+        "runs_p": runs_test(request.bits),
+        "serial_p": serial_test(request.bits)
+    }
+
+# PA2 Endpoints
+@app.post("/pa2/prf/evaluate")
+async def pa2_prf_evaluate(request: PA2PRFEvaluateRequest):
+    from pa2 import GGM_PRF
+    prf = GGM_PRF(depth=request.depth)
+    return {"y": str(prf.evaluate(request.k, request.x))}
+
+@app.post("/pa2/prf/distinguish")
+async def pa2_prf_distinguish(request: PA2PRFDistinguishRequest):
+    # Capture print output or simulate
+    q = request.q
+    k = random.randint(0, 2**32 - 1)
+    prf_outputs = [prf_f(k, i) for i in range(q)]
+    random_outputs = [random.randint(0, 2**32 - 1) for _ in range(q)]
+    prf_unique = len(set(prf_outputs))
+    rand_unique = len(set(random_outputs))
+    return {
+        "prf_unique": prf_unique,
+        "rand_unique": rand_unique,
+        "verdict": "PRF looks pseudorandom" if prf_unique == q else f"Observed {q - prf_unique} collisions"
+    }
+
+# PA3 Endpoints
+@app.post("/pa3/encrypt")
+async def pa3_encrypt(request: PA3EncryptRequest):
+    r, c = cpa_enc(request.k, request.m.encode())
+    return {"r": r, "c_hex": c.hex()}
+
+@app.post("/pa3/decrypt")
+async def pa3_decrypt(request: PA3DecryptRequest):
+    m = cpa_dec(request.k, request.r, bytes.fromhex(request.c_hex))
+    return {"m": m.decode(errors='ignore')}
+
+@app.post("/pa3/ind_cpa")
+async def pa3_ind_cpa(request: PA3INDCPAREquest):
+    # Mocking or running a small version
+    queries = min(request.queries, 100)
+    correct = 0
+    for _ in range(queries):
+        b = random.randint(0, 1)
+        m = b"A" if b == 0 else b"B"
+        r, c = cpa_enc(random.randint(0, 2**32-1), m)
+        if random.randint(0, 1) == b: # Dummy adversary
+            correct += 1
+    return {"correct": correct, "queries": queries, "advantage": abs(correct/queries - 0.5)}
+
+# PA4 Endpoints
+@app.post("/pa4/encrypt")
+async def pa4_encrypt(request: PA4EncryptRequest):
+    iv_or_r, c = mode_enc(request.mode, request.k, request.m.encode())
+    return {"iv_or_r": iv_or_r, "c_hex": c.hex()}
+
+@app.post("/pa4/decrypt")
+async def pa4_decrypt(request: PA4DecryptRequest):
+    m = mode_dec(request.mode, request.k, request.iv_or_r, bytes.fromhex(request.c_hex))
+    return {"m": m.decode(errors='ignore')}
+
+@app.post("/pa4/attack/iv_reuse")
+async def pa4_iv_reuse(request: PA4IVReuseRequest):
+    from pa4 import CBC_Enc
+    iv = 42
+    m1 = b"HELLO WORLD"
+    m2 = b"HELLO SPACE"
+    c1 = CBC_Enc(request.k, iv, m1)
+    c2 = CBC_Enc(request.k, iv, m2)
+    match_index = 0
+    for i in range(min(len(c1), len(c2))):
+        if c1[i] == c2[i]: match_index = i + 1
+        else: break
+    return {
+        "m1": m1.decode(),
+        "m2": m2.decode(),
+        "c1_hex": c1.hex(),
+        "c2_hex": c2.hex(),
+        "match_index": match_index
+    }
+
+# PA5 Endpoints
+@app.post("/pa5/mac")
+async def pa5_mac(request: PA5MACRequest):
+    m = bytes.fromhex(request.m_hex)
+    if request.mode == "PRF":
+        # PRF-MAC expects int for 1-byte messages
+        tag = mac_f(request.k, m[0] if m else 0, mode="PRF")
+    else:
+        tag = mac_f(request.k, m, mode="CBC")
+    return {"tag": tag}
+
+@app.post("/pa5/verify")
+async def pa5_verify(request: PA5VerifyRequest):
+    m = bytes.fromhex(request.m_hex)
+    if request.mode == "PRF":
+        valid = mac_vrfy(request.k, m[0] if m else 0, request.tag, mode="PRF")
+    else:
+        valid = mac_vrfy(request.k, m, request.tag, mode="CBC")
+    return {"valid": valid}
+
+@app.post("/pa5/attack/extension")
+async def pa5_extension(request: PA5ExtensionRequest):
+    from pa5 import naive_mac, Fk
+    k = request.k % 256
+    m = b"hello"
+    t = naive_mac(k, m)
+    extension = b"\x00world"
+    forged = t
+    for byte in extension:
+        forged = Fk(k, forged ^ byte)
+    correct = naive_mac(k, m + extension)
+    return {
+        "m": m.decode(),
+        "extension": "\\x00world",
+        "forged_tag": hex(forged),
+        "correct_tag": hex(correct),
+        "match": forged == correct
+    }
+
+# PA6 Endpoints
+@app.post("/pa6/encrypt")
+async def pa6_encrypt(request: PA6EncryptRequest):
+    (r, ct), t = CCA_Enc(request.ke, request.km, request.m.encode())
+    return {"r": r, "ct_hex": ct.hex(), "tag": t}
+
+@app.post("/pa6/decrypt")
+async def pa6_decrypt(request: PA6DecryptRequest):
+    c = (request.r, bytes.fromhex(request.ct_hex))
+    pt = CCA_Dec(request.ke, request.km, c, request.tag)
+    if pt is None:
+        return {"m": None, "valid": False}
+    return {"m": pt.decode(errors='ignore'), "valid": True}
 
 
 if __name__ == "__main__":

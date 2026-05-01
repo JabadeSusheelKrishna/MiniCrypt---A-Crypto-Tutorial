@@ -1,42 +1,86 @@
-import os, math
+import os, math, time
 
-P = 0xFFFFFFFFFFFFFFC5
-G = 5
+# --- OWF: Modular Exponentiation (DLP-based) ---
+class DLP_OWF:
+    def __init__(self):
+        # Using a safe prime P and generator G
+        self.P = 0xFFFFFFFFFFFFFFC5
+        self.G = 5
+        self.Q = (self.P - 1) // 2
 
-def owf(x: int) -> int:
-    return pow(G, x, P)
+    def evaluate(self, x: int) -> int:
+        """f(x) = G^x mod P"""
+        return pow(self.G, x, self.P)
+
+    def verify_hardness(self):
+        """Demo showing that random inversion fails (brute force is hard)."""
+        print("\n--- OWF Hardness Verification ---")
+        x = int.from_bytes(os.urandom(4), "big") % self.Q
+        y = self.evaluate(x)
+        print(f"Target y = f(x) = {y}")
+        print("Attempting brute-force inversion for 1 second...")
+        start = time.time()
+        found = False
+        count = 0
+        while time.time() - start < 1:
+            if self.evaluate(count) == y:
+                found = True
+                break
+            count += 1
+        if found:
+            print(f"  Success! Found x = {count}")
+        else:
+            print(f"  Failed! Searched {count} values, no match found.")
 
 def hcb(x: int) -> int:
+    """Hard-core bit: least significant bit."""
     return x & 1
 
-def prg(seed: int, length: int) -> list:
-    bits, x = [], seed
+# --- PRG from OWF ---
+def prg(seed_val: int, length: int) -> list:
+    """
+    Iterative hard-core bit construction:
+    G(x0) = b(x0) || b(x1) || ... || b(x_l) where xi+1 = f(xi)
+    """
+    owf_inst = DLP_OWF()
+    bits = []
+    curr = seed_val
     for _ in range(length):
-        bits.append(hcb(x))
-        x = owf(x)
+        bits.append(hcb(curr))
+        curr = owf_inst.evaluate(curr)
     return bits
 
-def owf_from_prg(s: int, length=16) -> int:
+# --- OWF from PRG (Backward direction) ---
+def owf_from_prg(s: int, length=64) -> int:
+    """Demonstrates that G(s) is a OWF."""
     bits = prg(s, length)
     return int("".join(str(b) for b in bits), 2)
 
-def _ensure_seed():
+# --- PRG Interface for PA#2 ---
+_state = {"seed": None}
+
+def seed(s: int):
+    _state["seed"] = s
+
+def next_bits(n: int) -> list:
     if _state["seed"] is None:
         _state["seed"] = int.from_bytes(os.urandom(8), "big")
+    
+    bits = prg(_state["seed"], n)
+    # Update seed for next call to maintain state
+    owf_inst = DLP_OWF()
+    new_seed = _state["seed"]
+    for _ in range(n):
+        new_seed = owf_inst.evaluate(new_seed)
+    _state["seed"] = new_seed
+    return bits
 
-def _get_random_int(n_bits: int) -> int:
-    if n_bits < 1:
-        raise ValueError("n_bits must be >= 1")
-    _ensure_seed()
+def get_random_bits(n_bits: int) -> int:
+    """Returns a random integer with exactly n_bits using the internal PRG."""
     bits = next_bits(n_bits)
     value = 0
     for b in bits:
         value = (value << 1) | b
-    return value
-
-def get_random_bits(n_bits: int) -> int:
-    """Returns a random integer with exactly n_bits using the internal PRG."""
-    value = _get_random_int(n_bits)
     return value | (1 << (n_bits - 1))
 
 def get_random_range(start: int, end: int) -> int:
@@ -48,29 +92,32 @@ def get_random_range(start: int, end: int) -> int:
         return start
     n_bits = diff.bit_length()
     while True:
-        value = _get_random_int(n_bits)
+        value = 0
+        bits = next_bits(n_bits)
+        for b in bits:
+            value = (value << 1) | b
         if value <= diff:
             return start + value
 
-# --- NIST Test 1: Frequency ---
+# --- Statistical Test Suite (NIST-lite) ---
 def freq_test(bits: list) -> float:
     n = len(bits)
     s = sum(1 if b else -1 for b in bits)
     p = math.erfc(abs(s) / math.sqrt(2 * n))
-    ratio = sum(bits) / n
-    print(f"Frequency Test: ratio={ratio:.3f}, p={p:.3f} → {'PASS' if p>=0.01 else 'FAIL'}")
+    print(f"Frequency Test: p={p:.3f} -> {'PASS' if p>=0.01 else 'FAIL'}")
     return p
 
-# --- NIST Test 2: Runs ---
 def runs_test(bits: list) -> float:
     n = len(bits)
     pi = sum(bits) / n
-    v = 1 + sum(1 for i in range(1, n) if bits[i] != bits[i-1])
-    p = math.erfc(abs(v - 2*n*pi*(1-pi)) / (2*math.sqrt(2*n)*pi*(1-pi)))
-    print(f"Runs Test:      v={v}, p={p:.3f} → {'PASS' if p>=0.01 else 'FAIL'}")
+    if abs(pi - 0.5) >= (2 / math.sqrt(n)):
+        p = 0.0
+    else:
+        v = 1 + sum(1 for i in range(1, n) if bits[i] != bits[i-1])
+        p = math.erfc(abs(v - 2*n*pi*(1-pi)) / (2*math.sqrt(2*n)*pi*(1-pi)))
+    print(f"Runs Test:      p={p:.3f} -> {'PASS' if p>=0.01 else 'FAIL'}")
     return p
 
-# --- NIST Test 3: Serial ---
 def serial_test(bits: list) -> float:
     n = len(bits)
     counts = {(0,0):0,(0,1):0,(1,0):0,(1,1):0}
@@ -79,31 +126,19 @@ def serial_test(bits: list) -> float:
     exp = n / 4
     chi2 = sum((c - exp)**2 / exp for c in counts.values())
     p = math.exp(-chi2 / 2)
-    print(f"Serial Test:    chi2={chi2:.3f}, p≈{p:.3f} → {'PASS' if p>=0.01 else 'FAIL'}")
+    print(f"Serial Test:    p~{p:.3f} -> {'PASS' if p>=0.01 else 'FAIL'}")
     return p
 
-# --- Named interface for PA#2 ---
-_state = {"seed": None}
-
-def seed(s: int):
-    _state["seed"] = s
-
-def next_bits(n: int) -> list:
-    _ensure_seed()
-    bits = prg(_state["seed"], n)
-    _state["seed"] = owf(_state["seed"])
-    return bits
-
-# --- Demo ---
 if __name__ == "__main__":
+    owf_inst = DLP_OWF()
+    owf_inst.verify_hardness()
+
+    print("\n--- PRG Demo & Tests ---")
     s = int.from_bytes(os.urandom(8), "big")
-    out = prg(s, 1000)
     print(f"Seed: {s}")
-    print(f"PRG : {''.join(str(b) for b in out[:32])}...")
+    out = prg(s, 1000)
     freq_test(out)
     runs_test(out)
     serial_test(out)
-    print(f"OWF(seed)         : {owf(s)}")
-    print(f"OWF_from_PRG(seed): {owf_from_prg(s)}")
-    seed(s)
-    print(f"next_bits(16)     : {next_bits(16)}")
+
+    print(f"\nOWF from PRG demo (Backward): {owf_from_prg(s, 16)}")

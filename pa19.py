@@ -1,8 +1,8 @@
-# PA #19 — Secure AND, XOR, NOT using OT
+# PA #19 ??? Secure AND, XOR, NOT using OT
 # Depends only on problem 18
 
 import importlib
-import random
+from proxy_random import random
 
 # Correct import
 ot_module = importlib.import_module("pa18")
@@ -86,7 +86,7 @@ def test_xor():
                     print("Error in XOR!", a, b, res)
                     return
 
-            print(f"{a} XOR {b} ✓")
+            print(f"{a} XOR {b} ???")
 
 
 def test_not():
@@ -97,7 +97,7 @@ def test_not():
         if res != (1 - a):
             print("Error in NOT!", a, res)
             return
-        print(f"NOT {a} ✓")
+        print(f"NOT {a} ???")
 
 
 # ----------------------------------------
@@ -110,14 +110,14 @@ def privacy_notes():
 Secure AND:
 - Bob learns only a*b from OT
 - OT guarantees Bob cannot learn a when b=0
-- Alice sees only public keys → learns nothing about b
+- Alice sees only public keys ??? learns nothing about b
 
 Secure XOR:
 - Random mask r hides both inputs
 - Neither party learns the other's bit
 
 Secure NOT:
-- Local operation → no information leakage
+- Local operation ??? no information leakage
 """)
 
 

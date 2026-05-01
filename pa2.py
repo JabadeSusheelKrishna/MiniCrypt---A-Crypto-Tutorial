@@ -1,49 +1,81 @@
-import os, hashlib, hmac as _hmac
-from pa1 import prg, owf
+import os
+from proxy_random import random
+from pa1 import prg
 
-def G(s: int, n: int = 8) -> tuple:
-    bits = prg(s, 2 * n)
-    def b2i(b): return int("".join(str(x) for x in b), 2)
-    return b2i(bits[:n]), b2i(bits[n:])
+# --- GGM Tree Construction ---
+class GGM_PRF:
+    def __init__(self, depth=8):
+        self.depth = depth
 
-def G0(s, n=8): return G(s, n)[0]
-def G1(s, n=8): return G(s, n)[1]
+    def G(self, s: int) -> tuple:
+        """Length-doubling PRG using PA#1."""
+        # We need bits to represent the two halves
+        bits = prg(s, 2 * self.depth)
+        half = len(bits) // 2
+        def b2i(b): return int("".join(str(x) for x in b), 2)
+        return b2i(bits[:half]), b2i(bits[half:])
 
-def prf(k: int, x: int, depth: int = 8) -> int:
-    s = k
-    for i in range(depth - 1, -1, -1):
-        s = G1(s) if (x >> i) & 1 else G0(s)
-    return s
+    def evaluate(self, k: int, x: int) -> int:
+        """
+        Follows the root-to-leaf path defined by bits of x.
+        x is an integer, we use its bits from MSB to LSB.
+        """
+        curr = k
+        for i in range(self.depth - 1, -1, -1):
+            bit = (x >> i) & 1
+            left, right = self.G(curr)
+            curr = right if bit else left
+        return curr
 
+# --- PRG from PRF (Backward Direction) ---
 def prg_from_prf(s: int, depth=8) -> tuple:
-    return prf(s, 0, depth), prf(s, 1, depth)
+    """G(s) = Fs(0) || Fs(1)"""
+    prf_inst = GGM_PRF(depth)
+    return prf_inst.evaluate(s, 0), prf_inst.evaluate(s, 1)
 
-# --- AES plugin (substitute with your own AES-128 for full credit) ---
-def aes_prf(k: int, x: int) -> int:
-    kb = k.to_bytes(max(1, (k.bit_length()+7)//8), "big")
-    xb = x.to_bytes(max(1, (x.bit_length()+7)//8), "big")
-    return _hmac.new(kb, xb, hashlib.sha256).digest()[0]
-
-# --- Public interface for PA#3, PA#4, PA#5 ---
+# --- Unified Interface ---
 def F(k: int, x: int) -> int:
-    return prf(k, x)
+    """Exposed PRF interface."""
+    return GGM_PRF().evaluate(k, x)
 
-# --- Demo ---
+# --- Distinguishing Game ---
+def distinguishing_game(prf_fn, q=100):
+    """
+    Test that distinguishes PRF from a random function.
+    q: number of queries.
+    """
+    print(f"\n--- Distinguishing Game (q={q}) ---")
+    k = int.from_bytes(os.urandom(4), "big")
+    
+    # Real PRF outputs
+    prf_outputs = [prf_fn(k, i) for i in range(q)]
+    
+    # Truly random outputs (simulated)
+    random_outputs = [int.from_bytes(os.urandom(4), "big") for _ in range(q)]
+    
+    # Statistical check: collision frequency
+    # In a truly random function with large range, collisions are rare.
+    prf_unique = len(set(prf_outputs))
+    rand_unique = len(set(random_outputs))
+    
+    print(f"  PRF Unique Outputs: {prf_unique}/{q}")
+    print(f"  Random Unique Outputs: {rand_unique}/{q}")
+    
+    if prf_unique == q:
+        print("  Verdict: PRF looks pseudorandom (no collisions in small sample).")
+    else:
+        print(f"  Verdict: Observed {q - prf_unique} collisions in PRF.")
+
 if __name__ == "__main__":
     k = int.from_bytes(os.urandom(4), "big")
-
-    print("=== GGM PRF ===")
-    for x in [0b00000000, 0b00000001, 0b11111111]:
-        print(f"  PRF(k, {x:08b}) = {prf(k, x):08b}")
-
-    print("\n=== PRG from PRF (backward) ===")
-    l, r = prg_from_prf(k)
-    print(f"  G(k) = {l:08b} | {r:08b}")
-
-    print("\n=== AES plugin ===")
+    ggm = GGM_PRF(depth=8)
+    
+    print("=== GGM PRF Demo ===")
     for x in [0, 1, 255]:
-        print(f"  aes_prf(k, {x}) = {aes_prf(k, x):08b}")
+        print(f"  F(k, {x:08b}) = {ggm.evaluate(k, x)}")
 
-    print("\n=== Distinguishing game (100 queries) ===")
-    outputs = {prf(k, x) for x in range(100)}
-    print(f"  Unique PRF outputs: {len(outputs)} / 100 (expect ~100)")
+    print("\n=== Backward Reduction: PRG from PRF ===")
+    l, r = prg_from_prf(k)
+    print(f"  G(k) = {l} || {r}")
+
+    distinguishing_game(F)

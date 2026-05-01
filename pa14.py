@@ -160,7 +160,7 @@ def integer_nth_root(x, e):
 
 def hastad_attack(ciphertexts, moduli, e):
     """
-    Håstad's Broadcast Attack for small exponent e.
+    H??stad's Broadcast Attack for small exponent e.
     ciphertexts: list of c_i = m^e mod N_i
     moduli: list of N_i
     e: the public exponent
@@ -189,7 +189,7 @@ def benchmark_decryption(bits=1024, iterations=100):
     sk_std = (n, d)
     # sk_crt is keys itself
     
-    import random
+    from proxy_random import random
     messages = [random.randint(1, n-1) for _ in range(iterations)]
     ciphertexts = [rsa_enc((n, e), m) for m in messages]
     
