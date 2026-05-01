@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 
 const PA20Millionaire = () => {
-  const [x, setX] = useState(7);   // Alice
-  const [y, setY] = useState(12);  // Bob
+  const [x, setX] = useState(7); // Alice
+  const [y, setY] = useState(12); // Bob
   const [result, setResult] = useState(null);
   const [trace, setTrace] = useState([]);
   const [progress, setProgress] = useState(0);
@@ -17,14 +17,19 @@ const PA20Millionaire = () => {
     setProgress(0);
 
     try {
-      const response = await fetch('/api/pa20/millionaire', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/pa20/millionaire", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ x, y, n: 4 }),
       });
 
       const data = await response.json();
-
+      console.log(data);
+      if (!data.trace) {
+        console.error("Invalid response:", data);
+        setLoading(false);
+        return;
+      }
       setResult(data.result);
       setTotalGates(data.total_gates);
 
@@ -36,11 +41,10 @@ const PA20Millionaire = () => {
           return;
         }
 
-        setTrace(prev => [...prev, data.trace[i]]);
+        setTrace((prev) => [...prev, data.trace[i]]);
         setProgress(Math.round(((i + 1) / data.total_gates) * 100));
         i++;
       }, 80); // animation speed
-
     } catch (e) {
       console.error(e);
     }
@@ -86,50 +90,27 @@ const PA20Millionaire = () => {
       {/* Run Button */}
       <button
         className="btn-primary"
-        style={{ width: '100%', marginBottom: '1rem' }}
+        style={{ width: "100%", marginBottom: "1rem" }}
         onClick={runComparison}
         disabled={loading}
       >
-        {loading ? 'Computing...' : 'Who is richer?'}
+        {loading ? "Computing..." : "Who is richer?"}
       </button>
-
-      {/* Progress Bar */}
-      {totalGates > 0 && (
-        <div style={{ marginBottom: '1rem' }}>
-          <div
-            style={{
-              height: '8px',
-              background: 'var(--border)',
-              borderRadius: '4px',
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                width: `${progress}%`,
-                height: '100%',
-                background: 'var(--accent)',
-                transition: 'width 0.1s linear',
-              }}
-            />
-          </div>
-          <p style={{ fontSize: '0.8rem' }}>
-            Progress: {progress}% ({trace.length}/{totalGates} gates)
-          </p>
-        </div>
-      )}
 
       {/* Result */}
       {result && (
         <div className="result-box">
-          <p><strong>Result:</strong> {result}</p>
+          <p>
+            <strong>Result:</strong> {result}
+          </p>
         </div>
       )}
 
       <div className="form-group">
-        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+        <p style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
           The protocol reveals only the result (who is richer) without revealing
-          the actual values of Alice or Bob. Circuit evaluation is shown gate-by-gate.
+          the actual values of Alice or Bob. Circuit evaluation is shown
+          gate-by-gate.
         </p>
       </div>
     </div>

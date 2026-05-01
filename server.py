@@ -814,8 +814,15 @@ async def millionaire_problem(request: PA20MillionaireRequest):
         y = request.y
         n = request.n
 
-        if not (0 <= x < 2**n and 0 <= y < 2**n):
-            raise HTTPException(status_code=400, detail="Inputs must fit in n bits")
+        # ❌ REMOVE strict check or replace it
+        # if not (0 <= x < 2**n and 0 <= y < 2**n):
+
+        # ✅ instead compute required n dynamically
+        max_val = max(x, y)
+        n = max_val.bit_length()
+
+        # if not (0 <= x < 2**n and 0 <= y < 2**n):
+        #     raise HTTPException(status_code=400, detail="Inputs must fit in n bits")
 
         # Convert to bits
         x_bits = int_to_bits(x, n)
