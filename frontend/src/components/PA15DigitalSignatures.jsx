@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 const PA15DigitalSignatures = () => {
   const [message, setMessage] = useState('Minicrypt Clique');
   const [useHash, setUseHash] = useState(true);
+  const [algorithm, setAlgorithm] = useState('RSA');
   const [bits, setBits] = useState(64);
   const [keys, setKeys] = useState(null);
   const [signature, setSignature] = useState(null);
@@ -28,7 +29,8 @@ const PA15DigitalSignatures = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/pa15/keygen', {
+      const endpoint = algorithm === 'RSA' ? '/api/pa15/keygen' : '/api/pa16/keygen';
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bits }),
@@ -54,10 +56,20 @@ const PA15DigitalSignatures = () => {
       const mBytes = encoder.encode(message);
       const mHex = Array.from(mBytes).map(b => b.toString(16).padStart(2, '0')).join('');
 
-      const response = await fetch('/api/pa15/sign', {
+      let endpoint = '/api/pa15/sign';
+      let payload = {};
+
+      if (algorithm === 'RSA') {
+        payload = { sk: keys.sk, m_bytes_hex: mHex };
+      } else {
+        endpoint = '/api/pa15/elgamal_sign';
+        payload = { sk: keys.sk, pk: keys.pk, m_bytes_hex: mHex };
+      }
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sk: keys.sk, m_bytes_hex: mHex }),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
@@ -65,7 +77,7 @@ const PA15DigitalSignatures = () => {
         throw new Error(data.detail || "Signing failed");
       }
 
-      setSignature(data.sigma);
+      setSignature(algorithm === 'RSA' ? data.sigma : { r: data.r, s: data.s });
       setVerificationResult(null);
     } catch (err) {
       setError("Signing Error: " + err.message);
@@ -83,10 +95,20 @@ const PA15DigitalSignatures = () => {
       const mBytes = encoder.encode(message);
       const mHex = Array.from(mBytes).map(b => b.toString(16).padStart(2, '0')).join('');
 
-      const response = await fetch('/api/pa15/verify', {
+      let endpoint = '/api/pa15/verify';
+      let payload = {};
+
+      if (algorithm === 'RSA') {
+        payload = { vk: keys.pk, m_bytes_hex: mHex, sigma: signature };
+      } else {
+        endpoint = '/api/pa15/elgamal_verify';
+        payload = { pk: keys.pk, m_bytes_hex: mHex, r: signature.r, s: signature.s };
+      }
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vk: keys.pk, m_bytes_hex: mHex, sigma: signature }),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
@@ -145,7 +167,7 @@ const PA15DigitalSignatures = () => {
 
   useEffect(() => {
     generateKeys();
-  }, [bits]);
+  }, [bits, algorithm]);
 
   return (
     <div className="panel">
@@ -156,12 +178,17 @@ const PA15DigitalSignatures = () => {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
         <div className="form-group">
-          <label>Modulus Size (bits): {bits * 2}</label>
+          <label>Algorithm</label>
+          <select value={algorithm} onChange={(e) => setAlgorithm(e.target.value)} style={{ padding: '0.5rem', width: '100%', marginBottom: '1rem', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', color: 'white' }}>
+            <option value="RSA">RSA (Hash-then-Sign)</option>
+            <option value="ElGamal">ElGamal (DLP-based)</option>
+          </select>
+          <label>{algorithm === 'RSA' ? 'Modulus Size (bits):' : 'Prime Size (bits):'} {algorithm === 'RSA' ? bits * 2 : bits}</label>
           <input
             type="range"
-            min="32"
-            max="128"
-            step="8"
+            min={algorithm === 'RSA' ? "32" : "64"}
+            max={algorithm === 'RSA' ? "128" : "512"}
+            step={algorithm === 'RSA' ? "8" : "64"}
             value={bits}
             onChange={(e) => setBits(parseInt(e.target.value))}
           />
@@ -172,13 +199,26 @@ const PA15DigitalSignatures = () => {
 
         {keys && (
           <div className="witness-item" style={{ borderLeftColor: 'var(--primary)' }}>
-            <h4 style={{ fontSize: '0.875rem', marginBottom: '0.5rem' }}>Current RSA Keys</h4>
-            <div style={{ fontSize: '0.7rem', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              <strong>N:</strong> {keys.pk.n.substring(0, 20)}...
-            </div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--accent)' }}>
-              <strong>e:</strong> {keys.pk.e} | <strong>d:</strong> {keys.sk.d.substring(0, 10)}...
-            </div>
+            <h4 style={{ fontSize: '0.875rem', marginBottom: '0.5rem' }}>Current {algorithm} Keys</h4>
+            {algorithm === 'RSA' ? (
+              <>
+                <div style={{ fontSize: '0.7rem', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <strong>N:</strong> {keys.pk.n?.substring(0, 20) || '...'}
+                </div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--accent)' }}>
+                  <strong>e:</strong> {keys.pk.e || '...'} | <strong>d:</strong> {keys.sk.d?.substring(0, 10) || '...'}
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: '0.7rem', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <strong>p:</strong> {keys.pk.p?.substring(0, 20) || '...'}
+                </div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--accent)' }}>
+                  <strong>g:</strong> {keys.pk.g || '...'} | <strong>x:</strong> {keys.sk.x?.substring(0, 10) || '...'}
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -202,7 +242,7 @@ const PA15DigitalSignatures = () => {
       {signature && (
         <div className="result-box">
           <div style={{ marginBottom: '1rem' }}>
-            <label>Signature (σ = H(m)ᵈ mod N)</label>
+            <label>Signature {algorithm === 'RSA' ? '(σ = H(m)ᵈ mod N)' : '(r, s)'}</label>
             <div style={{
               fontFamily: 'monospace',
               fontSize: '0.8rem',
@@ -213,7 +253,7 @@ const PA15DigitalSignatures = () => {
               marginTop: '0.25rem',
               color: 'var(--primary)'
             }}>
-              {signature}
+              {algorithm === 'RSA' ? signature : `r: ${signature.r || '...'}\ns: ${signature.s || '...'}`}
             </div>
           </div>
 
@@ -243,25 +283,27 @@ const PA15DigitalSignatures = () => {
         </div>
       )}
 
-      <div className="carmichael-info" style={{ background: 'rgba(245, 158, 11, 0.05)', borderColor: 'rgba(245, 158, 11, 0.2)' }}>
-        <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem', color: '#f59e0b' }}>
-          Existential Forgery (Raw RSA)
-        </h3>
-        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-          Without hashing, RSA is multiplicatively homomorphic. Given signatures for $m_1$ and $m_2$, anyone can compute a valid signature for $m_1 \cdot m_2$.
-        </p>
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          <span style={{ fontSize: '0.875rem' }}>σ({forgeData.m1}) × σ({forgeData.m2}) = σ({parseInt(forgeData.m1) * parseInt(forgeData.m2)})</span>
-          <button className="foundation-btn" onClick={runForgeryDemo} style={{ marginLeft: 'auto', background: '#f59e0b', color: 'black' }}>
-            Forge Signature
-          </button>
-        </div>
-        {forgedSig && (
-          <div style={{ marginTop: '0.75rem', fontSize: '0.75rem', fontFamily: 'monospace', wordBreak: 'break-all', color: '#f59e0b' }}>
-            <strong>Forged σ({parseInt(forgeData.m1) * parseInt(forgeData.m2)}):</strong> {forgedSig}
+      {algorithm === 'RSA' && (
+        <div className="carmichael-info" style={{ background: 'rgba(245, 158, 11, 0.05)', borderColor: 'rgba(245, 158, 11, 0.2)' }}>
+          <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem', color: '#f59e0b' }}>
+            Existential Forgery (Raw RSA)
+          </h3>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+            Without hashing, RSA is multiplicatively homomorphic. Given signatures for $m_1$ and $m_2$, anyone can compute a valid signature for $m_1 \cdot m_2$.
+          </p>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.875rem' }}>σ({forgeData.m1}) × σ({forgeData.m2}) = σ({parseInt(forgeData.m1) * parseInt(forgeData.m2)})</span>
+            <button className="foundation-btn" onClick={runForgeryDemo} style={{ marginLeft: 'auto', background: '#f59e0b', color: 'black' }}>
+              Forge Signature
+            </button>
           </div>
-        )}
-      </div>
+          {forgedSig && (
+            <div style={{ marginTop: '0.75rem', fontSize: '0.75rem', fontFamily: 'monospace', wordBreak: 'break-all', color: '#f59e0b' }}>
+              <strong>Forged σ({parseInt(forgeData.m1) * parseInt(forgeData.m2)}):</strong> {forgedSig}
+            </div>
+          )}
+        </div>
+      )}
 
       {error && (
         <div style={{

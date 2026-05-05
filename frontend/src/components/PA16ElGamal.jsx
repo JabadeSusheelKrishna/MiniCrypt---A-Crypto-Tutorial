@@ -9,6 +9,7 @@ const PA16ElGamal = () => {
   const [loading, setLoading] = useState(false);
   const [malleableCiphertext, setMalleableCiphertext] = useState(null);
   const [malleableDecrypted, setMalleableDecrypted] = useState(null);
+  const [indCpaResult, setIndCpaResult] = useState(null);
   const [error, setError] = useState(null);
 
   const generateKeys = async () => {
@@ -106,6 +107,23 @@ const PA16ElGamal = () => {
       await decryptMessage(data.c1, data.c2, true);
     } catch (err) {
       setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const runIndCpaDemo = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/pa16/ind_cpa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ queries: 50 }),
+      });
+      const data = await response.json();
+      setIndCpaResult(data);
+    } catch (err) {
+      setError("IND-CPA Demo Error: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -218,6 +236,42 @@ const PA16ElGamal = () => {
           </div>
         </div>
       )}
+
+      <div className="result-box" style={{ marginTop: '2rem', border: '1px solid var(--accent)', background: 'rgba(16, 185, 129, 0.05)' }}>
+        <h3 style={{ fontSize: '1rem', color: 'var(--accent)', marginBottom: '0.5rem' }}>IND-CPA Security Game (ElGamal)</h3>
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+          ElGamal is theoretically <strong>IND-CPA secure</strong> (assuming the Decisional Diffie-Hellman problem is hard). 
+          In this game, the adversary submits two messages ($m_0, m_1$), and the challenger encrypts one randomly. 
+          The adversary then tries to guess which message was encrypted. 
+          <br /><br />
+          <strong>Expected Result:</strong> An adversary should have no better than a 50% chance of guessing correctly (Advantage ≈ 0.0), proving the scheme hides all information about the plaintext under chosen plaintext attacks.
+        </p>
+        
+        <button className="foundation-btn" onClick={runIndCpaDemo} disabled={loading} style={{ background: 'var(--accent)', color: 'black' }}>
+          {loading ? 'Running Game...' : 'Run IND-CPA Game (50 trials)'}
+        </button>
+
+        {indCpaResult && (
+          <div style={{ marginTop: '1rem', padding: '1rem', background: 'rgba(0,0,0,0.3)', borderRadius: '8px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', textAlign: 'center' }}>
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Trials</div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>{indCpaResult.queries}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Adversary Wins</div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>{indCpaResult.correct}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Advantage</div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: indCpaResult.advantage < 0.2 ? 'var(--accent)' : 'var(--danger)' }}>
+                  {indCpaResult.advantage.toFixed(2)}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       {error && (
         <div style={{

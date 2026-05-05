@@ -11,6 +11,34 @@ def rsa_sign(sk, m: bytes) -> int:
     n, d = sk
     return modular_exponentiation(h, d, n)
 
+def elgamal_sign(sk, pk, m: bytes) -> tuple:
+    """
+    Signs a message using the ElGamal signature scheme.
+    sk: (x, p)
+    pk: (p, g, q, h)
+    """
+    from pa14 import mod_inverse
+    import random
+    
+    x, p = sk
+    _, g, q, _ = pk
+    
+    hm = hash_message(m) % q
+    
+    while True:
+        k = random.randint(1, q - 1)
+        try:
+            k_inv = mod_inverse(k, q)
+            break
+        except Exception:
+            continue
+            
+    r = modular_exponentiation(g, k, p)
+    s = ((hm - x * r) * k_inv) % q
+    
+    return (r, s)
+
+
 def rsa_verify(vk, m: bytes, sigma: int) -> bool:
     """
     Verifies a signature using the public key.
@@ -20,6 +48,27 @@ def rsa_verify(vk, m: bytes, sigma: int) -> bool:
     n, e = vk
     recovered_h = modular_exponentiation(sigma, e, n)
     return recovered_h == h % n
+
+def elgamal_verify(pk, m: bytes, sig: tuple) -> bool:
+    """
+    Verifies an ElGamal signature.
+    pk: (p, g, q, h)
+    sig: (r, s)
+    """
+    r, s = sig
+    p, g, q, h = pk
+    
+    if not (0 < r < p) or not (0 < s < q):
+        return False
+        
+    hm = hash_message(m) % q
+    
+    # Check if g^H(m) == h^r * r^s mod p
+    left = modular_exponentiation(g, hm, p)
+    right = (modular_exponentiation(h, r, p) * modular_exponentiation(r, s, p)) % p
+    
+    return left == right
+
 
 def forge_raw_rsa(s1: int, s2: int, n: int) -> int:
     """

@@ -6,7 +6,7 @@ import time
 from proxy_random import random
 from pa13 import miller_rabin, gen_prime, is_prime, modular_exponentiation
 from pa14 import crt, rsa_dec_crt, hastad_attack, benchmark_decryption, rsa_keygen, rsa_enc
-from pa15 import rsa_sign, rsa_verify, forge_raw_rsa
+from pa15 import rsa_sign, rsa_verify, forge_raw_rsa, elgamal_sign, elgamal_verify
 from pa16 import elgamal_keygen, elgamal_enc, elgamal_dec, elgamal_malleability_attack
 from pa1 import DLP_OWF, prg, freq_test, runs_test, serial_test
 from pa2 import F as prf_f, distinguishing_game as prf_distinguish
@@ -102,6 +102,17 @@ class PA15ForgeRequest(BaseModel):
     s2: str
     n: str
 
+class PA15ElGamalSignRequest(BaseModel):
+    sk: dict
+    pk: dict
+    m_bytes_hex: str
+
+class PA15ElGamalVerifyRequest(BaseModel):
+    pk: dict
+    m_bytes_hex: str
+    r: str
+    s: str
+
 class PA15KeygenRequest(BaseModel):
     bits: int
 
@@ -123,6 +134,9 @@ class PA16MalleabilityRequest(BaseModel):
     c2: str
     p: str
     multiplier: str
+
+class PA16INDCPAREquest(BaseModel):
+    queries: Optional[int] = 50
 
 #PA17 models
 class PA17EncryptRequest(BaseModel):
@@ -389,6 +403,28 @@ async def pa15_forge(request: PA15ForgeRequest):
     s3 = forge_raw_rsa(s1, s2, n)
     return {"s3": str(s3)}
 
+@app.post("/pa15/elgamal_sign")
+async def pa15_elgamal_sign(request: PA15ElGamalSignRequest):
+    try:
+        sk = (int(request.sk["x"]), int(request.sk["p"]))
+        pk = (int(request.pk["p"]), int(request.pk["g"]), int(request.pk["q"]), int(request.pk["h"]))
+        m_bytes = bytes.fromhex(request.m_bytes_hex)
+        r, s = elgamal_sign(sk, pk, m_bytes)
+        return {"r": str(r), "s": str(s)}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/pa15/elgamal_verify")
+async def pa15_elgamal_verify(request: PA15ElGamalVerifyRequest):
+    try:
+        pk = (int(request.pk["p"]), int(request.pk["g"]), int(request.pk["q"]), int(request.pk["h"]))
+        m_bytes = bytes.fromhex(request.m_bytes_hex)
+        sig = (int(request.r), int(request.s))
+        is_valid = elgamal_verify(pk, m_bytes, sig)
+        return {"valid": is_valid}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 @app.post("/pa15/keygen")
 async def pa15_keygen(request: PA15KeygenRequest):
     try:
@@ -445,6 +481,26 @@ async def pa16_attack(request: PA16MalleabilityRequest):
         mult = int(request.multiplier)
         nc1, nc2 = elgamal_malleability_attack(c1, c2, p, mult)
         return {"c1": str(nc1), "c2": str(nc2)}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/pa16/ind_cpa")
+async def pa16_ind_cpa(request: PA16INDCPAREquest):
+    from pa16 import ind_cpa_game_elgamal
+    def adv_phase1(pk):
+        return (0, 1, None)
+    def adv_phase2(pk, c1, c2, state):
+        return random.choice([0, 1])
+    
+    try:
+        sk, pk = elgamal_keygen(32)
+        queries = min(request.queries, 100)
+        correct = 0
+        for _ in range(queries):
+            if ind_cpa_game_elgamal((adv_phase1, adv_phase2), pk, sk):
+                correct += 1
+                
+        return {"correct": correct, "queries": queries, "advantage": abs(correct/queries - 0.5)}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
