@@ -22,14 +22,15 @@ class Gate:
 
 
 class Circuit:
-    def __init__(self):
+    def __init__(self, num_inputs):
         self.gates = []
         self.output_wire = None
+        self.num_inputs = num_inputs
 
     def add_gate(self, gate_type, in1, in2=None):
         g = Gate(gate_type, in1, in2)
         self.gates.append(g)
-        return len(self.gates) - 1  # wire index
+        return self.num_inputs + len(self.gates) - 1  # wire index
 
     def set_output(self, wire):
         self.output_wire = wire
@@ -64,6 +65,8 @@ def secure_eval(circuit, inputs):
 
         wires.append(res)
 
+    if isinstance(circuit.output_wire, list):
+        return [wires[w] for w in circuit.output_wire]
     return wires[circuit.output_wire]
 
 
@@ -86,7 +89,7 @@ def bits_to_int(bits):
 # ----------------------------------------
 
 def build_equality_circuit(n):
-    c = Circuit()
+    c = Circuit(2 * n)
 
     wires = list(range(2 * n))  # x_bits + y_bits
 
@@ -109,7 +112,7 @@ def build_equality_circuit(n):
 
 
 def build_addition_circuit(n):
-    c = Circuit()
+    c = Circuit(2 * n)
 
     wires = list(range(2 * n))
     carry = None
@@ -137,12 +140,12 @@ def build_addition_circuit(n):
 
         result_wires.insert(0, sum_bit)
 
-    c.set_output(result_wires[0])  # just return MSB for demo
+    c.set_output(result_wires)  # return all sum bits
     return c
 
 
 def build_gt_circuit(n):
-    c = Circuit()
+    c = Circuit(2 * n)
 
     gt = None
     eq = None
@@ -209,16 +212,33 @@ def performance_report(n):
 
     inputs = x_bits + y_bits
 
-    circuit = build_gt_circuit(n)
-
+    circuit_gt = build_gt_circuit(n)
     start = time.time()
-    result = secure_eval(circuit, inputs)
+    result_gt = secure_eval(circuit_gt, inputs)
     end = time.time()
+    time_gt = end - start
+    ot_gt = OT_COUNTER
 
-    print("\n--- Performance ---")
-    print("Result:", result)
-    print("OT calls:", OT_COUNTER)
-    print("Time:", end - start, "seconds")
+    OT_COUNTER = 0
+    circuit_eq = build_equality_circuit(n)
+    start = time.time()
+    result_eq = secure_eval(circuit_eq, inputs)
+    end = time.time()
+    time_eq = end - start
+    ot_eq = OT_COUNTER
+
+    OT_COUNTER = 0
+    circuit_add = build_addition_circuit(n)
+    start = time.time()
+    result_add = secure_eval(circuit_add, inputs)
+    end = time.time()
+    time_add = end - start
+    ot_add = OT_COUNTER
+
+    print(f"\n--- Performance (n={n}) ---")
+    print(f"Greater than: OT calls = {ot_gt}, Time = {time_gt:.2f} seconds")
+    print(f"Equality: OT calls = {ot_eq}, Time = {time_eq:.2f} seconds")
+    print(f"Addition: OT calls = {ot_add}, Time = {time_add:.2f} seconds")
 
 
 # ----------------------------------------
@@ -247,8 +267,15 @@ if __name__ == "__main__":
     gt_circuit = build_gt_circuit(n)
     print("Greater than:", secure_eval(gt_circuit, inputs))
 
+    # Addition
+    add_circuit = build_addition_circuit(n)
+    sum_bits = secure_eval(add_circuit, inputs)
+    print("Addition (bits):", sum_bits)
+    print("Addition (int):", bits_to_int(sum_bits))
+
     # Performance
-    performance_report(8)
+    print("\nRunning performance report for n=8. This might take some time...")
+    performance_report(4)
 
     # Privacy
     privacy_check()

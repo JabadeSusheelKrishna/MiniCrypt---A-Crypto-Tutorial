@@ -22,8 +22,10 @@ from pa19 import (
 from pa20 import (
     build_gt_circuit,
     build_equality_circuit,
+    build_addition_circuit,
     secure_eval,
     int_to_bits,
+    bits_to_int,
     OT_COUNTER,
     TRANSCRIPT
 )
@@ -255,6 +257,51 @@ class PA20MillionaireRequest(BaseModel):
 class PA19ANDRequest(BaseModel):
     a: int
     b: int
+
+# PA20 Millionaire endpoint
+@app.post("/pa20/millionaire")
+async def pa20_millionaire(request: PA20MillionaireRequest):
+    try:
+        import pa20 as _pa20
+        n = request.n
+        x_bits = int_to_bits(request.x, n)
+        y_bits = int_to_bits(request.y, n)
+        inputs = x_bits + y_bits
+
+        # --- Greater-than evaluation ---
+        _pa20.OT_COUNTER = 0
+        _pa20.TRANSCRIPT = []
+
+        gt_circuit = build_gt_circuit(n)
+        gt_result = secure_eval(gt_circuit, inputs)  # 1 if x > y
+        gt_gates = len(gt_circuit.gates)
+        gt_trace = _pa20.TRANSCRIPT.copy()
+        gt_ot = _pa20.OT_COUNTER
+
+        # --- Equality evaluation ---
+        _pa20.OT_COUNTER = 0
+        _pa20.TRANSCRIPT = []
+
+        eq_circuit = build_equality_circuit(n)
+        eq_result = secure_eval(eq_circuit, inputs)  # 1 if x == y
+        eq_ot = _pa20.OT_COUNTER
+
+        # Determine human-readable result
+        if gt_result:
+            result_str = "Alice is richer"
+        elif eq_result:
+            result_str = "Equal"
+        else:
+            result_str = "Bob is richer"
+
+        return {
+            "result": result_str,
+            "total_gates": gt_gates,
+            "ot_calls": gt_ot,
+            "trace": gt_trace
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/pa13/test")
 async def test_primality(request: PrimalityTestRequest):

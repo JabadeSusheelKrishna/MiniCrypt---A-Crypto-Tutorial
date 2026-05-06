@@ -8,7 +8,7 @@ def modular_exponentiation(base, exp, mod):
     """
     Computes (base^exp) % mod using square-and-multiply.
     """
-    print("-----> Started Modular Exponentiation")
+    # print("-----> Started Modular Exponentiation")
     if mod == 1:
         return 0
     res = 1
@@ -19,7 +19,7 @@ def modular_exponentiation(base, exp, mod):
         base = (base * base) % mod
         exp >>= 1
 
-    print("-----> Finished Modular Exponentiation")
+    # print("-----> Finished Modular Exponentiation")
     return res
 
 def extended_gcd(a, b):
