@@ -71,25 +71,60 @@ def Vrfy(k, m, t, mode="CBC"):
     if mode == "PRF": return prf_vrfy(k, m, t)
     return cbc_mac_vrfy(k, m, t)
 
+# --- EUF-CMA Game Helpers ---
+def get_euf_cma_list(k: int, count: int = 50):
+    """Generates a list of (m, t) pairs for the EUF-CMA game."""
+    pairs = []
+    for i in range(count):
+        m = i # Simple message
+        t = prf_mac(k, m)
+        pairs.append({"m": m, "t": t})
+    return pairs
+
+def verify_forgery(k: int, m: int, t: int, signed_messages: list):
+    """Verifies if (m, t) is a valid forgery."""
+    # Check if message was already signed
+    for pair in signed_messages:
+        if pair['m'] == m:
+            return False, "Message already in list"
+    
+    # Check if tag is correct
+    if prf_mac(k, m) == t:
+        return True, "Forgery accepted"
+    else:
+        return False, "Forgery rejected"
+
 # --- Length-extension attack on naive H(k||m) ---
 def naive_mac(k: int, m: bytes) -> int:
     """Broken MAC: state = H(k || m), vulnerable to extension."""
-    return cbc_mac(k, bytes([k]) + m)
+    # Initial state depends on k
+    state = Fk(k, k & MASK)
+    for byte in m:
+        state = Fk(k, state ^ byte)
+    return state
+
+def length_extension_compute(t: int, suffix: bytes, k_for_ek: int) -> int:
+    """
+    Computes extended tag from previous tag t and suffix.
+    H(k||m||m') = f(H(k||m), m')
+    """
+    state = t
+    for byte in suffix:
+        state = Fk(k_for_ek, state ^ byte)
+    return state
 
 def length_extension_demo(k: int):
     print("\n--- Length-Extension Attack Demo ---")
     m = b"hello"
     t = naive_mac(k, m)
     # Attacker continues from state=t without knowing k
-    forged = t
-    for byte in b"\x00" + b"world":
-        forged = Fk(k, forged ^ byte)
-    correct = naive_mac(k, m + b"\x00" + b"world")
-    print(f"  m: {m}, extension: \\x00world")
+    extension = b"\x00world"
+    forged = length_extension_compute(t, extension, k)
+    correct = naive_mac(k, m + extension)
+    print(f"  m: {m}, extension: {extension}")
     print(f"  forged tag : {forged:#x}")
     print(f"  correct tag: {correct:#x}")
     print(f"  Match: {forged == correct} (Attack Succeeded!)")
-    print(f"  Same attack on HMAC -> impossible (outer hash re-keys with k+opad)")
 
 if __name__ == "__main__":
     k = os.urandom(1)[0]

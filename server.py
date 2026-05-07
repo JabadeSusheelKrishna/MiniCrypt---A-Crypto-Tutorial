@@ -16,14 +16,17 @@ from pa4 import (
     Encrypt as mode_enc, 
     Decrypt as mode_dec, 
     cbc_iv_reuse_demo, 
-    ofb_keystream_reuse_demo,
-    prf_mac,
+    ofb_keystream_reuse_demo
+)
+from pa5 import (
+    Mac as mac_f, 
+    Vrfy as mac_vrfy, 
+    length_extension_demo,
     get_euf_cma_list,
     verify_forgery,
-    naive_hash_mac,
+    naive_mac as naive_hash_mac,
     length_extension_compute
 )
-from pa5 import Mac as mac_f, Vrfy as mac_vrfy, length_extension_demo
 from pa6 import CCA_Enc, CCA_Dec, malleability_demo, independent_keygen
 from pa19 import (
     ot_receiver_step1,
@@ -1094,14 +1097,12 @@ async def pa5_verify(request: PA5VerifyRequest):
 
 @app.post("/pa5/attack/extension")
 async def pa5_extension(request: PA5ExtensionRequest):
-    from pa5 import naive_mac, Fk
+    from pa5 import naive_mac, length_extension_compute
     k = request.k % 256
     m = b"hello"
     t = naive_mac(k, m)
     extension = b"\x00world"
-    forged = t
-    for byte in extension:
-        forged = Fk(k, forged ^ byte)
+    forged = length_extension_compute(t, extension, k)
     correct = naive_mac(k, m + extension)
     return {
         "m": m.decode(),
