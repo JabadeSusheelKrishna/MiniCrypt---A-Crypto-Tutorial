@@ -332,6 +332,10 @@ class PA11ExchangeRequest(BaseModel):
     b: Optional[int] = None
     eve_enabled: bool = False
 
+# PA1 
+class PA1OWFVerifyRequest(BaseModel):
+    target: str
+
 
 # -------------------------------------------------
 # PA12 GLOBAL RSA KEYS
@@ -842,21 +846,33 @@ async def pa1_owf_evaluate(request: PA1OWFEvaluateRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid input: {str(e)}")
 
+# PA1 
 @app.post("/pa1/owf/verify")
-async def pa1_owf_verify():
+async def pa1_owf_verify(request: PA1OWFVerifyRequest):
     owf = DLP_OWF()
-    # Simplified hardness verification for web
-    x = random.randint(0, owf.Q - 1)
-    y = owf.evaluate(x)
+
+    val = request.target.strip()
+
+    if val.startswith('0x') or any(c in 'abcdefABCDEF' for c in val):
+        y = int(val, 16)
+    else:
+        y = int(val)
+
     start = time.time()
     found = False
     count = 0
-    while time.time() - start < 0.5: # Half second for web response
+
+    while time.time() - start < 0.5:
         if owf.evaluate(count) == y:
             found = True
             break
         count += 1
-    return {"target": str(y), "found": found, "count": count}
+
+    return {
+        "target": str(y),
+        "found": found,
+        "count": count
+    }
 
 @app.post("/pa1/prg/generate")
 async def pa1_prg_generate(request: PA1PRGGenerateRequest):
