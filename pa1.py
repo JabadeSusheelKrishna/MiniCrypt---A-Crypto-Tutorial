@@ -128,39 +128,326 @@ def get_random_range(start: int, end: int) -> int:
             return start + value
 
 # --- Statistical Test Suite (NIST-lite) ---
+
 def freq_test(bits: list) -> float:
-    """NIST Frequency (Monobit) Test."""
+    """
+    NIST Frequency (Monobit) Test.
+
+    Goal:
+    -----
+    Checks whether the number of 1s and 0s are approximately equal.
+
+    Truly random data should have:
+        #1s ≈ #0s
+
+    Steps:
+    ------
+    1. Compute total number of bits:
+           n = len(bits)
+
+    2. Convert:
+           1 -> +1
+           0 -> -1
+
+       Then sum all values:
+           s = (#1s - #0s)
+
+       If bits are balanced:
+           s ≈ 0
+
+    3. Normalize deviation:
+           abs(s) / sqrt(2n)
+
+       This adjusts for sample size.
+
+    4. Convert deviation into a p-value using:
+           erfc(...)
+
+       Large imbalance -> small p-value
+       Small imbalance -> large p-value
+
+    Interpretation:
+    ---------------
+    p close to 1:
+        Looks random
+
+    p close to 0:
+        Suspicious / non-random
+
+    Typical threshold:
+        p >= 0.01 -> PASS
+        p <  0.01 -> FAIL
+    """
+
     n = len(bits)
-    if n == 0: return 0.0
+
+    # Empty sequence -> invalid test
+    if n == 0:
+        return 0.0
+
+    # Convert:
+    #   1 -> +1
+    #   0 -> -1
+    #
+    # This measures imbalance between 1s and 0s.
+    #
+    # Example:
+    #   bits = 10110010
+    #
+    # becomes:
+    #   +1 -1 +1 +1 -1 -1 +1 -1
+    #
+    # sum = 0  (perfectly balanced)
     s = sum(1 if b else -1 for b in bits)
+
+    # Compute p-value using complementary error function.
+    #
+    # Small imbalance:
+    #   high p-value
+    #
+    # Large imbalance:
+    #   low p-value
     p = math.erfc(abs(s) / math.sqrt(2 * n))
+
     return p
+
 
 def runs_test(bits: list) -> float:
-    """NIST Runs Test."""
+    """
+    NIST Runs Test.
+
+    Goal:
+    -----
+    Checks whether transitions between 0 and 1 occur naturally.
+
+    A "run" means consecutive identical bits.
+
+    Example:
+        11100011
+
+    Runs:
+        111
+        000
+        11
+
+    Random data should:
+        - sometimes switch
+        - sometimes stay same
+
+    Too many runs:
+        101010101010
+
+    Too few runs:
+        111111000000
+
+    Both are suspicious.
+
+    Steps:
+    ------
+    1. Compute:
+           pi = fraction of 1s
+
+    2. Pre-test:
+       Runs test assumes frequency balance is already reasonable.
+
+       If:
+           |pi - 0.5| too large
+
+       then immediately fail.
+
+    3. Count runs:
+       Count how many times adjacent bits differ.
+
+    4. Compute expected runs count:
+           2 * n * pi * (1-pi)
+
+    5. Compare observed vs expected.
+
+    6. Convert deviation into p-value using erfc().
+    """
+
     n = len(bits)
-    if n == 0: return 0.0
+
+    # Empty sequence -> invalid
+    if n == 0:
+        return 0.0
+
+    # Fraction of 1s
+    #
+    # Example:
+    #   10110010
+    #
+    # -> 4 ones out of 8 bits
+    #
+    # pi = 0.5
     pi = sum(bits) / n
-    # Pre-test: if frequency is too off, runs test fails
+
+    # Pre-test:
+    #
+    # If frequency balance is already bad,
+    # runs test automatically fails.
+    #
+    # Reason:
+    # Runs behavior is meaningful only
+    # when 1s and 0s are reasonably balanced.
     if abs(pi - 0.5) >= (2 / math.sqrt(n)):
         return 0.0
-    
-    v = 1 + sum(1 for i in range(1, n) if bits[i] != bits[i-1])
-    num = abs(v - 2 * n * pi * (1 - pi))
+
+    # Count runs.
+    #
+    # A new run starts whenever:
+    #   bits[i] != bits[i-1]
+    #
+    # Example:
+    #   101100
+    #
+    # transitions:
+    #   1->0 yes
+    #   0->1 yes
+    #   1->1 no
+    #   1->0 yes
+    #   0->0 no
+    #
+    # Total transitions = 3
+    #
+    # Runs = transitions + 1 = 4
+    v = 1 + sum(
+        1 for i in range(1, n)
+        if bits[i] != bits[i - 1]
+    )
+
+    # Expected number of runs
+    # for random bits.
+    expected = 2 * n * pi * (1 - pi)
+
+    # Difference between observed
+    # and expected runs count.
+    num = abs(v - expected)
+
+    # Normalization factor.
+    #
+    # Adjusts deviation relative
+    # to sequence length.
     den = 2 * math.sqrt(2 * n) * pi * (1 - pi)
+
+    # Convert normalized deviation
+    # into p-value.
     p = math.erfc(num / den)
+
     return p
 
+
 def serial_test(bits: list) -> float:
-    """Simplified Serial Test (checks pairs)."""
+    """
+    Simplified Serial Test.
+
+    Goal:
+    -----
+    Checks whether adjacent bit pairs are uniformly distributed.
+
+    Pair types:
+        00
+        01
+        10
+        11
+
+    Random data should produce all pairs
+    roughly equally often.
+
+    Why Important:
+    --------------
+    Even balanced bits may contain patterns.
+
+    Example:
+        1010101010
+
+    has:
+        #1s = #0s
+
+    BUT only produces:
+        01 and 10
+
+    Never:
+        00 or 11
+
+    Clearly non-random.
+
+    Steps:
+    ------
+    1. Count occurrences of:
+           00, 01, 10, 11
+
+    2. Expected count:
+           n / 4
+
+       because there are 4 pair types.
+
+    3. Compute chi-square statistic:
+           Σ((observed - expected)^2 / expected)
+
+       Measures deviation from uniformity.
+
+    4. Convert chi-square into p-value.
+    """
+
     n = len(bits)
-    if n < 2: return 0.0
-    counts = {(0,0):0, (0,1):0, (1,0):0, (1,1):0}
+
+    # Need at least 2 bits
+    # to form pairs.
+    if n < 2:
+        return 0.0
+
+    # Initialize pair counters.
+    counts = {
+        (0, 0): 0,
+        (0, 1): 0,
+        (1, 0): 0,
+        (1, 1): 0
+    }
+
+    # Count adjacent pairs.
+    #
+    # Uses circular indexing:
+    #   bits[(i+1)%n]
+    #
+    # so the last bit pairs with the first.
+    #
+    # Example:
+    #   101100
+    #
+    # pairs:
+    #   10
+    #   01
+    #   11
+    #   10
+    #   00
+    #   01
     for i in range(n):
-        counts[(bits[i], bits[(i+1)%n])] += 1
+        counts[(bits[i], bits[(i + 1) % n])] += 1
+
+    # Expected frequency
+    # for each pair type.
     exp = n / 4
-    chi2 = sum((c - exp)**2 / exp for c in counts.values())
+
+    # Chi-square statistic.
+    #
+    # Measures how far observed counts
+    # differ from expected counts.
+    #
+    # Large chi-square:
+    #   suspicious / non-random
+    #
+    # Small chi-square:
+    #   close to random
+    chi2 = sum(
+        (c - exp) ** 2 / exp
+        for c in counts.values()
+    )
+
+    # Convert chi-square value
+    # into p-value.
     p = math.exp(-chi2 / 2)
+
     return p
 
 if __name__ == "__main__":
