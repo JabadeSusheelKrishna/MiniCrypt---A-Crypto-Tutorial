@@ -218,10 +218,10 @@ class OTStep2Request(BaseModel):
 
 # PA1 Models
 class PA1OWFEvaluateRequest(BaseModel):
-    x: int
+    x: str
 
 class PA1PRGGenerateRequest(BaseModel):
-    seed: int
+    seed: str
     length: int
 
 class PA1PRGTestRequest(BaseModel):
@@ -830,8 +830,17 @@ async def ot_cheat(request: OTStep2Request):
 # PA1 Endpoints
 @app.post("/pa1/owf/evaluate")
 async def pa1_owf_evaluate(request: PA1OWFEvaluateRequest):
-    owf = DLP_OWF()
-    return {"y": str(owf.evaluate(request.x))}
+    try:
+        owf = DLP_OWF()
+        # Handle both hex (with or without 0x) and decimal
+        val = request.x.strip()
+        if val.startswith('0x') or any(c in 'abcdefABCDEF' for c in val):
+            x = int(val, 16)
+        else:
+            x = int(val)
+        return {"y": hex(owf.evaluate(x))}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid input: {str(e)}")
 
 @app.post("/pa1/owf/verify")
 async def pa1_owf_verify():
@@ -851,8 +860,16 @@ async def pa1_owf_verify():
 
 @app.post("/pa1/prg/generate")
 async def pa1_prg_generate(request: PA1PRGGenerateRequest):
-    bits = prg(request.seed, request.length)
-    return {"bits": bits}
+    try:
+        val = request.seed.strip()
+        if val.startswith('0x') or any(c in 'abcdefABCDEF' for c in val):
+            seed_val = int(val, 16)
+        else:
+            seed_val = int(val)
+        bits = prg(seed_val, request.length)
+        return {"bits": bits}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid seed: {str(e)}")
 
 @app.post("/pa1/prg/test")
 async def pa1_prg_test(request: PA1PRGTestRequest):
