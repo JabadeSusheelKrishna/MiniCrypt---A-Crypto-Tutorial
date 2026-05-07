@@ -8,17 +8,24 @@ class GGM_PRF:
         self.depth = depth
 
     def G(self, s: int) -> tuple:
-        """Length-doubling PRG using PA#1."""
-        # We need bits to represent the two halves
-        bits = prg(s, 2 * self.depth)
-        half = len(bits) // 2
-        def b2i(b): return int("".join(str(x) for x in b), 2)
-        return b2i(bits[:half]), b2i(bits[half:])
+        """
+        Length-doubling PRG using PA#1.
+        Expands a 64-bit seed into two 64-bit halves (128 bits total).
+        """
+        # Generate 128 bits to split into two 64-bit integers
+        bits = prg(s, 128)
+        
+        def b2i(b):
+            res = 0
+            for bit in b:
+                res = (res << 1) | bit
+            return res
+            
+        return b2i(bits[:64]), b2i(bits[64:])
 
     def evaluate(self, k: int, x: int) -> int:
         """
         Follows the root-to-leaf path defined by bits of x.
-        x is an integer, we use its bits from MSB to LSB.
         """
         curr = k
         for i in range(self.depth - 1, -1, -1):

@@ -229,7 +229,7 @@ class PA1PRGTestRequest(BaseModel):
 
 # PA2 Models
 class PA2PRFEvaluateRequest(BaseModel):
-    k: int
+    k: str
     x: int
     depth: Optional[int] = 8
 
@@ -882,9 +882,18 @@ async def pa1_prg_test(request: PA1PRGTestRequest):
 # PA2 Endpoints
 @app.post("/pa2/prf/evaluate")
 async def pa2_prf_evaluate(request: PA2PRFEvaluateRequest):
-    from pa2 import GGM_PRF
-    prf = GGM_PRF(depth=request.depth)
-    return {"y": str(prf.evaluate(request.k, request.x))}
+    try:
+        from pa2 import GGM_PRF
+        val = request.k.strip()
+        if val.startswith('0x') or any(c in 'abcdefABCDEF' for c in val):
+            k = int(val, 16)
+        else:
+            k = int(val)
+        prf = GGM_PRF(depth=request.depth)
+        y = prf.evaluate(k, request.x)
+        return {"y": hex(y)}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid key: {str(e)}")
 
 @app.post("/pa2/prf/distinguish")
 async def pa2_prf_distinguish(request: PA2PRFDistinguishRequest):
