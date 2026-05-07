@@ -5,7 +5,8 @@ from typing import List, Optional
 import time
 from proxy_random import random
 from pa13 import miller_rabin, gen_prime, is_prime, modular_exponentiation
-from pa14 import crt, rsa_dec_crt, hastad_attack, benchmark_decryption, rsa_keygen, rsa_enc
+from pa14 import crt, rsa_dec_crt, hastad_attack, benchmark_decryption, rsa_enc
+from pa14 import rsa_keygen as rsa_keygen_p14
 from pa15 import rsa_sign, rsa_verify, forge_raw_rsa, elgamal_sign, elgamal_verify
 from pa16 import elgamal_keygen, elgamal_enc, elgamal_dec, elgamal_malleability_attack
 from pa1 import DLP_OWF, prg, freq_test, runs_test, serial_test
@@ -477,7 +478,7 @@ async def hastad_demo_setup(request: HastadDemoRequest):
         recipients = []
         for _ in range(e):
             # Pass e=request.e to ensure we get keys compatible with the requested e
-            keys = rsa_keygen(bits // 2, e=e)
+            keys = rsa_keygen_p14(bits // 2, e=e)
             n_i = keys['n']
             
             if request.use_padding:
@@ -563,7 +564,7 @@ async def pa15_elgamal_verify(request: PA15ElGamalVerifyRequest):
 async def pa15_keygen(request: PA15KeygenRequest):
     try:
         print("PA15 : Bits: ", request.bits)
-        keys = rsa_keygen(request.bits)
+        keys = rsa_keygen_p14(request.bits)
         return {
             "pk": {"n": str(keys["n"]), "e": str(keys["e"])},
             "sk": {"n": str(keys["n"]), "d": str(keys["d"])}
