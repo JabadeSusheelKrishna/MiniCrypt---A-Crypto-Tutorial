@@ -105,6 +105,52 @@ def Decrypt(mode, k, IV_or_r, C):
     else:
         raise ValueError("Unknown mode")
 
+# --- MAC and Interactive Demo Logic (PA4/PA5 integration) ---
+import random as py_random
+
+def prf_mac(k: int, m: int) -> int:
+    """Mac(k, m) = Fk(m) using the PRF from pa2/pa4."""
+    return Ek(k, m & MASK)
+
+def get_euf_cma_list(k: int, count: int = 50):
+    """Generates a list of (m, t) pairs."""
+    pairs = []
+    for i in range(count):
+        m = i # Simple message
+        t = prf_mac(k, m)
+        pairs.append({"m": m, "t": t})
+    return pairs
+
+def verify_forgery(k: int, m: int, t: int, signed_messages: list):
+    """Verifies if (m, t) is a valid forgery."""
+    # Check if message was already signed
+    for pair in signed_messages:
+        if pair['m'] == m:
+            return False, "Message already in list"
+    
+    # Check if tag is correct
+    if prf_mac(k, m) == t:
+        return True, "Forgery accepted"
+    else:
+        return False, "Forgery rejected"
+
+# --- Length Extension Demo Logic ---
+def naive_hash_mac(k: int, m: bytes) -> int:
+    """Broken MAC: H(k || m) where H is CBC-MAC style."""
+    state = Ek(k, k & MASK) # Initial state depends on k
+    for byte in m:
+        state = Ek(k, state ^ byte)
+    return state
+
+def length_extension_compute(t: int, suffix: bytes, k_for_ek: int) -> int:
+    """Computes extended tag from previous tag t and suffix, WITHOUT knowing k (ideally).
+    In this toy demo, we still need k for Ek, but the point is we start from state t.
+    """
+    state = t
+    for byte in suffix:
+        state = Ek(k_for_ek, state ^ byte)
+    return state
+
 # --- Attack Demos ---
 def cbc_iv_reuse_demo(k):
     print("\n--- CBC IV-Reuse Attack Demo ---")

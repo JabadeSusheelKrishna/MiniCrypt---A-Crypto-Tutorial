@@ -12,7 +12,17 @@ from pa16 import elgamal_keygen, elgamal_enc, elgamal_dec, elgamal_malleability_
 from pa1 import DLP_OWF, prg, freq_test, runs_test, serial_test
 from pa2 import F as prf_f, distinguishing_game as prf_distinguish
 from pa3 import Enc as cpa_enc, Dec as cpa_dec, ind_cpa_game
-from pa4 import Encrypt as mode_enc, Decrypt as mode_dec, cbc_iv_reuse_demo, ofb_keystream_reuse_demo
+from pa4 import (
+    Encrypt as mode_enc, 
+    Decrypt as mode_dec, 
+    cbc_iv_reuse_demo, 
+    ofb_keystream_reuse_demo,
+    prf_mac,
+    get_euf_cma_list,
+    verify_forgery,
+    naive_hash_mac,
+    length_extension_compute
+)
 from pa5 import Mac as mac_f, Vrfy as mac_vrfy, length_extension_demo
 from pa6 import CCA_Enc, CCA_Dec, malleability_demo, independent_keygen
 from pa19 import (
@@ -264,6 +274,20 @@ class PA4DecryptRequest(BaseModel):
 
 class PA4IVReuseRequest(BaseModel):
     k: int
+
+class PA4ForgeListRequest(BaseModel):
+    k: int
+
+class PA4SubmitForgeryRequest(BaseModel):
+    k: int
+    m: int
+    t: int
+    signed_messages: List[dict]
+
+class PA4LengthExtensionRequest(BaseModel):
+    k: int
+    m: str
+    suffix: str
 
 # PA5 Models
 class PA5MACRequest(BaseModel):
@@ -1004,6 +1028,49 @@ async def pa4_iv_reuse(request: PA4IVReuseRequest):
         "c2_hex": c2.hex(),
         "match_index": match_index
     }
+
+@app.post("/pa4/mac/list")
+async def pa4_mac_list(request: PA4ForgeListRequest):
+    try:
+        # We generate a list for a given k
+        pairs = get_euf_cma_list(request.k)
+        return {"pairs": pairs}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/pa4/mac/forge")
+async def pa4_mac_forge(request: PA4SubmitForgeryRequest):
+    try:
+        valid, message = verify_forgery(request.k, request.m, request.t, request.signed_messages)
+        return {"valid": valid, "message": message}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/pa4/mac/length_extension")
+async def pa4_mac_length_extension(request: PA4LengthExtensionRequest):
+    try:
+        m_bytes = request.m.encode()
+        suffix_bytes = request.suffix.encode()
+        
+        # Original tag
+        t = naive_hash_mac(request.k, m_bytes)
+        
+        # Attacker computes extended tag WITHOUT k (ideally)
+        # But in this implementation, we demo how H(k||m||pad||m') = f(H(k||m||pad), m')
+        # Here we just show H(k||m||m') being computed from H(k||m)
+        extended_tag = length_extension_compute(t, suffix_bytes, request.k)
+        
+        # Correct tag for verification
+        correct_tag = naive_hash_mac(request.k, m_bytes + suffix_bytes)
+        
+        return {
+            "original_tag": t,
+            "extended_tag": extended_tag,
+            "correct_tag": correct_tag,
+            "match": extended_tag == correct_tag
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 # PA5 Endpoints
 @app.post("/pa5/mac")
