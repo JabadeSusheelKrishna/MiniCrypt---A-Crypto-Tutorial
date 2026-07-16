@@ -122,6 +122,14 @@ The project spans **20 distinct Programming Assignments**, bridging SKE, Hashing
 
 The React frontend includes specialized, high-fidelity components to make mathematical proofs intuitive:
 
+<img src="./static/1.png" width="20%>
+<img src="./static/2.png" width="20%>
+<img src="./static/3.png" width="20%>
+<img src="./static/4.png" width="20%>
+<img src="./static/5.png" width="20%>
+<img src="./static/6.png" width="20%>
+<img src="./static/7.png" width="20%>
+
 ### 🌿 GGM Tree Path Visualizer (PA #2)
 *   **What it shows**: Visualizes the binary tree traversal of a GGM tree up to depth 8.
 *   **Why it's cool**: Click any leaf or path bit to watch the node evaluation transition in real-time, visualizing how a 1-bit input flip shifts the outputs completely.
